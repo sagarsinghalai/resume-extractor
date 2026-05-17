@@ -1,0 +1,72 @@
+/* ── Drop Zone ──────────────────────────────────────────────────── */
+.drop-zone {
+  border: 2px dashed #0d6efd;
+  background: #f8f9ff;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+.drop-zone:hover,
+.drop-zone.drag-over {
+  background: #e8f0ff;
+  border-color: #0a58ca;
+}
+
+/* ── Table ──────────────────────────────────────────────────────── */
+#contacts-table thead th {
+  white-space: nowrap;
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+#contacts-table td {
+  font-size: 0.875rem;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#contacts-table td.wrap {
+  white-space: normal;
+  max-width: 220px;
+}
+
+/* ── Live Pulse ─────────────────────────────────────────────────── */
+.live-pulse {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+  animation: pulse 1.4s ease infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.7); }
+}
+
+/* ── Skill Badges ───────────────────────────────────────────────── */
+.skill-badge {
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: #e9ecef;
+  color: #495057;
+  border: 1px solid #dee2e6;
+  white-space: nowrap;
+}
+
+/* ── Cards ──────────────────────────────────────────────────────── */
+.card { border-radius: 12px; }
+.navbar { border-bottom: 1px solid rgba(255,255,255,0.08); }
+
+/* ── File list ──────────────────────────────────────────────────── */
+.list-group-item { font-size: 0.875rem; }
+
+/* ── Scrollable table wrapper ───────────────────────────────────── */
+.table-responsive { max-height: 65vh; }
+.table-responsive thead th { position: sticky; top: 0; z-index: 1; }
