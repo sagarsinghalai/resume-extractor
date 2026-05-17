@@ -27,6 +27,10 @@
                   {% if request.path == '/upload' %}bg-white bg-opacity-10{% endif %}" href="/upload">
           <i class="bi bi-cloud-upload me-1"></i>Upload
         </a>
+        <a class="nav-link text-white px-3 py-2 rounded
+                  {% if '/projects' in request.path %}bg-white bg-opacity-10{% endif %}" href="/projects">
+          <i class="bi bi-folder2-open me-1"></i>Projects
+        </a>
         {% if session.role == 'superadmin' %}
           <a class="nav-link text-white px-3 py-2 rounded
                     {% if '/admin' in request.path %}bg-white bg-opacity-10{% endif %}"

@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} — Resume Extractor{% endblock %}
+
+{% block content %}
+
+<!-- Project Header -->
+<div class="d-flex align-items-start mb-4 flex-wrap gap-2">
+  <div>
+    <div class="d-flex align-items-center gap-2 mb-1">
+      <a href="/projects" class="btn btn-sm btn-outline-secondary py-0 px-2">
+        <i class="bi bi-arrow-left"></i>
+      </a>
+      <h4 class="fw-bold mb-0">
+        <i class="bi bi-folder-fill me-2 text-warning"></i>{{ project.name }}
+      </h4>
+    </div>
+    {% if project.description %}
+      <div class="text-muted small ms-5 ps-1">{{ project.description }}</div>
+    {% endif %}
+    {% if session.role == 'superadmin' and project.owner_username %}
+      <div class="ms-5 ps-1 mt-1">
+        <span class="badge bg-secondary small">Owner: {{ project.owner_username }}</span>
+      </div>
+    {% endif %}
+  </div>
+  <div class="ms-auto d-flex gap-2">
+    <a href="/upload?project_id={{ project.id }}" class="btn btn-primary">
+      <i class="bi bi-upload me-1"></i>Upload to this Project
+    </a>
+    <button id="export-btn" class="btn btn-success">
+      <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
+    </button>
+  </div>
+</div>
+
+<!-- Search + Filters -->
+<div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
+  <div class="input-group flex-grow-1" style="max-width:380px">
+    <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+    <input type="text" id="search-input" class="form-control border-start-0"
+           placeholder="Search name, email, company...">
+  </div>
+</div>
+
+<div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+  <i class="bi bi-funnel text-muted"></i>
+  <select id="filter-location" class="form-select form-select-sm w-auto">
+    <option value="">All Locations</option>
+  </select>
+  <select id="filter-job-title" class="form-select form-select-sm w-auto">
+    <option value="">All Job Titles</option>
+  </select>
+  <select id="filter-skill" class="form-select form-select-sm w-auto">
+    <option value="">All Skills</option>
+  </select>
+  <button id="clear-filters-btn" class="btn btn-sm btn-outline-secondary d-none">
+    <i class="bi bi-x-circle me-1"></i>Clear Filters
+  </button>
+</div>
+
+<!-- Contacts Table -->
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0" id="contacts-table">
+        <thead>
+          <tr class="table-dark">
+            <th class="ps-3">#</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Location</th>
+            <th>Job Title</th>
+            <th>Company</th>
+            <th>Skills</th>
+            <th>Links</th>
+            <th>Source</th>
+            {% if session.role == 'superadmin' %}
+              <th>Uploaded By</th>
+            {% endif %}
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="contacts-tbody">
+          <tr><td colspan="{{ 12 if session.role == 'superadmin' else 11 }}"
+                  class="text-center text-muted py-5">
+            <div class="spinner-border spinner-border-sm me-2"></div>Loading contacts...
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card-footer text-muted small" id="table-footer"></div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.IS_SUPERADMIN  = {{ 'true' if session.role == 'superadmin' else 'false' }};
+  window.PROJECT_ID     = {{ project.id }};
+  window.PROJECT_NAME   = {{ project.name | tojson }};
+</script>
+<script src="/static/js/project_detail.js"></script>
+{% endblock %}

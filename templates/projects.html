@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Projects — Resume Extractor{% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<div class="d-flex align-items-center mb-4 flex-wrap gap-2">
+  <div>
+    <h4 class="fw-bold mb-0">
+      <i class="bi bi-folder2-open me-2 text-primary"></i>Projects
+    </h4>
+    <div class="text-muted small mt-1">Organise your resume uploads into projects</div>
+  </div>
+  <div class="ms-auto">
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newProjectModal">
+      <i class="bi bi-plus-lg me-1"></i>New Project
+    </button>
+  </div>
+</div>
+
+<!-- Project Cards -->
+<div id="projects-grid" class="row g-3">
+  <!-- Rendered by JS -->
+  <div class="col-12 text-center py-5 text-muted" id="projects-loading">
+    <div class="spinner-border spinner-border-sm me-2"></div>Loading projects...
+  </div>
+</div>
+
+<!-- New Project Modal -->
+<div class="modal fade" id="newProjectModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header border-0 text-white py-3"
+           style="background: linear-gradient(135deg,#0f3460,#1a73e8)">
+        <h5 class="modal-title fw-semibold">
+          <i class="bi bi-folder-plus me-2"></i>Create New Project
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <div id="modal-error" class="alert alert-danger d-none py-2 small"></div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold small">Project Name <span class="text-danger">*</span></label>
+          <input type="text" id="project-name" class="form-control"
+                 placeholder="e.g. Software Engineers Q2 2025" maxlength="120">
+        </div>
+        <div class="mb-1">
+          <label class="form-label fw-semibold small">Description <span class="text-muted">(optional)</span></label>
+          <textarea id="project-desc" class="form-control" rows="3"
+                    placeholder="What is this project for?" maxlength="500"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="create-project-btn">
+          <i class="bi bi-plus-lg me-1"></i>Create Project
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.IS_SUPERADMIN = {{ 'true' if session.role == 'superadmin' else 'false' }};
+</script>
+<script src="/static/js/projects.js"></script>
+{% endblock %}

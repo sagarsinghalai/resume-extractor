@@ -70,19 +70,25 @@ def init_db():
     conn = get_conn()
     cur = conn.cursor()
 
-    # Users must be created before resumes (FK dependency)
+    # Order matters: users → projects → resumes → contacts (FK chain)
     cur.execute(models.USERS_TABLE)
+    cur.execute(models.PROJECTS_TABLE)
     cur.execute(models.RESUMES_TABLE)
     cur.execute(models.CONTACTS_TABLE)
 
     # Migration: add user_id to existing resumes tables
     if DATABASE_URL:
         cur.execute("ALTER TABLE resumes ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);")
+        cur.execute("ALTER TABLE resumes ADD COLUMN IF NOT EXISTS project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL;")
     else:
-        try:
-            cur.execute("ALTER TABLE resumes ADD COLUMN user_id INTEGER REFERENCES users(id);")
-        except Exception:
-            pass  # column already exists
+        for col_sql in [
+            "ALTER TABLE resumes ADD COLUMN user_id INTEGER REFERENCES users(id);",
+            "ALTER TABLE resumes ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL;",
+        ]:
+            try:
+                cur.execute(col_sql)
+            except Exception:
+                pass  # column already exists
 
     for stmt in models.INDEX_STATEMENTS:
         try:
@@ -195,19 +201,19 @@ def update_user_password(user_id: int, new_password: str):
 
 # ── Resumes ───────────────────────────────────────────────────────────────────
 
-def insert_resume(original_filename: str, pdf_bytes: bytes, user_id: int = None) -> int:
+def insert_resume(original_filename: str, pdf_bytes: bytes, user_id: int = None, project_id: int = None) -> int:
     conn = get_conn()
     cur = conn.cursor()
     if DATABASE_URL:
         cur.execute(
-            f"INSERT INTO resumes (original_filename, file_data, user_id) VALUES ({P},{P},{P}) RETURNING id",
-            (original_filename, _binary(pdf_bytes), user_id),
+            f"INSERT INTO resumes (original_filename, file_data, user_id, project_id) VALUES ({P},{P},{P},{P}) RETURNING id",
+            (original_filename, _binary(pdf_bytes), user_id, project_id),
         )
         row_id = cur.fetchone()[0]
     else:
         cur.execute(
-            f"INSERT INTO resumes (original_filename, file_data, user_id) VALUES ({P},{P},{P})",
-            (original_filename, _binary(pdf_bytes), user_id),
+            f"INSERT INTO resumes (original_filename, file_data, user_id, project_id) VALUES ({P},{P},{P},{P})",
+            (original_filename, _binary(pdf_bytes), user_id, project_id),
         )
         row_id = cur.lastrowid
     conn.commit()
@@ -399,3 +405,158 @@ def get_filter_options(user_id: int = None, role: str = None) -> dict:
             if s:
                 skills_set.add(s.strip())
     return {"locations": locations, "job_titles": job_titles, "skills": sorted(skills_set)}
+
+
+# ── Projects ──────────────────────────────────────────────────────────────────
+
+def create_project(name: str, description: str, user_id: int):
+    conn = get_conn()
+    cur = conn.cursor()
+    try:
+        if DATABASE_URL:
+            cur.execute(
+                f"INSERT INTO projects (name, description, user_id) VALUES ({P},{P},{P}) RETURNING id, name, description, created_at",
+                (name, description or None, user_id),
+            )
+            row = _row(cur)
+        else:
+            cur.execute(
+                f"INSERT INTO projects (name, description, user_id) VALUES ({P},{P},{P})",
+                (name, description or None, user_id),
+            )
+            new_id = cur.lastrowid
+            cur.execute(f"SELECT id, name, description, created_at FROM projects WHERE id={P}", (new_id,))
+            row = _row(cur)
+        conn.commit()
+        if row and row.get("created_at") and not isinstance(row["created_at"], str):
+            row["created_at"] = str(row["created_at"])
+        return row
+    except Exception:
+        conn.rollback()
+        return None
+    finally:
+        conn.close()
+
+
+def get_all_projects(user_id: int = None, role: str = None) -> list:
+    conn = get_conn()
+    cur = conn.cursor()
+
+    if role == "superadmin":
+        cur.execute(
+            """SELECT p.id, p.name, p.description, p.created_at,
+                      u.username AS owner_username,
+                      u.role     AS owner_role,
+                      COUNT(DISTINCT r.id)  AS resume_count,
+                      COUNT(DISTINCT c.id)  AS contact_count
+               FROM projects p
+               LEFT JOIN users u    ON p.user_id    = u.id
+               LEFT JOIN resumes r  ON r.project_id = p.id
+               LEFT JOIN contacts c ON c.resume_id  = r.id
+               GROUP BY p.id, p.name, p.description, p.created_at, u.username, u.role
+               ORDER BY p.created_at DESC"""
+        )
+    else:
+        cur.execute(
+            f"""SELECT p.id, p.name, p.description, p.created_at,
+                       COUNT(DISTINCT r.id)  AS resume_count,
+                       COUNT(DISTINCT c.id)  AS contact_count
+                FROM projects p
+                LEFT JOIN resumes r  ON r.project_id = p.id
+                LEFT JOIN contacts c ON c.resume_id  = r.id
+                WHERE p.user_id = {P}
+                GROUP BY p.id, p.name, p.description, p.created_at
+                ORDER BY p.created_at DESC""",
+            (user_id,),
+        )
+
+    rows = _rows(cur)
+    conn.close()
+    for r in rows:
+        if r.get("created_at") and not isinstance(r["created_at"], str):
+            r["created_at"] = str(r["created_at"])
+    return rows
+
+
+def get_project_by_id(project_id: int, user_id: int = None, role: str = None):
+    conn = get_conn()
+    cur = conn.cursor()
+    if role == "superadmin":
+        cur.execute(
+            f"""SELECT p.id, p.name, p.description, p.created_at, p.user_id,
+                       u.username AS owner_username, u.role AS owner_role
+                FROM projects p
+                LEFT JOIN users u ON p.user_id = u.id
+                WHERE p.id = {P}""",
+            (project_id,),
+        )
+    else:
+        cur.execute(
+            f"SELECT id, name, description, created_at, user_id FROM projects WHERE id={P} AND user_id={P}",
+            (project_id, user_id),
+        )
+    result = _row(cur)
+    conn.close()
+    if result and result.get("created_at") and not isinstance(result["created_at"], str):
+        result["created_at"] = str(result["created_at"])
+    return result
+
+
+def delete_project(project_id: int):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(f"DELETE FROM projects WHERE id={P}", (project_id,))
+    conn.commit()
+    conn.close()
+
+
+def _process_contact_rows(rows: list) -> list:
+    """Shared post-processing for contact query results."""
+    result = []
+    for d in rows:
+        try:
+            d["skills"] = json.loads(d["skills"]) if d["skills"] else []
+        except (json.JSONDecodeError, TypeError):
+            d["skills"] = []
+        for key in ("extracted_at", "upload_date"):
+            if d.get(key) and not isinstance(d[key], str):
+                d[key] = str(d[key])
+        result.append(d)
+    return result
+
+
+def get_project_contacts(project_id: int, user_id: int = None, role: str = None) -> list:
+    conn = get_conn()
+    cur = conn.cursor()
+
+    if role == "superadmin":
+        cur.execute(
+            f"""SELECT c.id, c.resume_id, c.name, c.email, c.phone, c.linkedin,
+                       c.location, c.job_title, c.company, c.skills, c.other_details,
+                       c.extracted_at,
+                       r.original_filename, r.upload_date, r.status,
+                       u.username AS uploaded_by_username,
+                       u.role     AS uploaded_by_role
+                FROM contacts c
+                JOIN resumes r ON c.resume_id = r.id
+                LEFT JOIN users u ON r.user_id = u.id
+                WHERE r.project_id = {P}
+                ORDER BY c.extracted_at DESC""",
+            (project_id,),
+        )
+    else:
+        cur.execute(
+            f"""SELECT c.id, c.resume_id, c.name, c.email, c.phone, c.linkedin,
+                       c.location, c.job_title, c.company, c.skills, c.other_details,
+                       c.extracted_at,
+                       r.original_filename, r.upload_date, r.status
+                FROM contacts c
+                JOIN resumes r ON c.resume_id = r.id
+                WHERE r.project_id = {P} AND r.user_id = {P}
+                ORDER BY c.extracted_at DESC""",
+            (project_id, user_id),
+        )
+
+    rows = _rows(cur)
+    conn.close()
+    return _process_contact_rows(rows)

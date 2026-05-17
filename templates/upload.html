@@ -23,6 +23,22 @@
           <input type="file" id="file-input" accept=".pdf" multiple hidden>
         </div>
 
+        <!-- Project Selector -->
+        <div class="mb-3">
+          <label class="form-label fw-semibold small">
+            <i class="bi bi-folder2-open me-1 text-warning"></i>Assign to Project
+            <span class="text-muted fw-normal">(optional)</span>
+          </label>
+          <select id="project-select" class="form-select">
+            <option value="">— No Project —</option>
+          </select>
+          <div class="form-text">
+            <a href="/projects" class="text-decoration-none small">
+              <i class="bi bi-plus-circle me-1"></i>Create a new project
+            </a>
+          </div>
+        </div>
+
         <!-- File Preview List -->
         <ul id="file-list" class="list-group mb-3 rounded-3 overflow-hidden"></ul>
 

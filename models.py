@@ -14,6 +14,15 @@ if DATABASE_URL:
         created_at    TIMESTAMP DEFAULT NOW()
     );
     """
+    PROJECTS_TABLE = """
+    CREATE TABLE IF NOT EXISTS projects (
+        id          SERIAL PRIMARY KEY,
+        name        TEXT NOT NULL,
+        description TEXT,
+        user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        created_at  TIMESTAMP DEFAULT NOW()
+    );
+    """
     RESUMES_TABLE = """
     CREATE TABLE IF NOT EXISTS resumes (
         id                SERIAL PRIMARY KEY,
@@ -23,7 +32,8 @@ if DATABASE_URL:
         status            TEXT NOT NULL DEFAULT 'pending',
         raw_text          TEXT,
         error_message     TEXT,
-        user_id           INTEGER REFERENCES users(id)
+        user_id           INTEGER REFERENCES users(id),
+        project_id        INTEGER REFERENCES projects(id) ON DELETE SET NULL
     );
     """
     CONTACTS_TABLE = """
@@ -54,6 +64,15 @@ else:
         created_at    DATETIME DEFAULT (datetime('now', 'localtime'))
     );
     """
+    PROJECTS_TABLE = """
+    CREATE TABLE IF NOT EXISTS projects (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        name        TEXT NOT NULL,
+        description TEXT,
+        user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        created_at  DATETIME DEFAULT (datetime('now', 'localtime'))
+    );
+    """
     RESUMES_TABLE = """
     CREATE TABLE IF NOT EXISTS resumes (
         id                INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,7 +82,8 @@ else:
         status            TEXT NOT NULL DEFAULT 'pending',
         raw_text          TEXT,
         error_message     TEXT,
-        user_id           INTEGER REFERENCES users(id)
+        user_id           INTEGER REFERENCES users(id),
+        project_id        INTEGER REFERENCES projects(id) ON DELETE SET NULL
     );
     """
     CONTACTS_TABLE = """
@@ -89,4 +109,6 @@ INDEX_STATEMENTS = [
     "CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);",
     "CREATE INDEX IF NOT EXISTS idx_resumes_user_id ON resumes(user_id);",
     "CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);",
+    "CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);",
+    "CREATE INDEX IF NOT EXISTS idx_resumes_project_id ON resumes(project_id);",
 ]

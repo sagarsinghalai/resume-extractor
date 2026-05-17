@@ -98,6 +98,22 @@ def upload_page():
     return render_template("upload.html")
 
 
+@app.route("/projects")
+@login_required
+def projects_page():
+    return render_template("projects.html")
+
+
+@app.route("/projects/<int:project_id>")
+@login_required
+def project_detail_page(project_id):
+    user_id, role = current_user()
+    project = database.get_project_by_id(project_id, user_id, role)
+    if not project:
+        return "Project not found or access denied.", 404
+    return render_template("project_detail.html", project=project)
+
+
 # ── Superadmin: user management ───────────────────────────────────────────────
 
 @app.route("/admin/users")
@@ -164,6 +180,15 @@ def api_upload():
     if not ANTHROPIC_API_KEY:
         return jsonify({"error": "ANTHROPIC_API_KEY not configured on server"}), 500
 
+    # Optional project assignment
+    project_id_raw = request.form.get("project_id", "").strip()
+    project_id_val = int(project_id_raw) if project_id_raw else None
+    # Verify project ownership if provided
+    if project_id_val:
+        proj = database.get_project_by_id(project_id_val, user_id, role)
+        if not proj:
+            project_id_val = None  # ignore invalid/foreign project
+
     files = request.files.getlist("files")
     uploaded, skipped, resume_ids = 0, 0, []
 
@@ -172,7 +197,7 @@ def api_upload():
             skipped += 1
             continue
         pdf_bytes = f.read()
-        resume_id = database.insert_resume(f.filename, pdf_bytes, user_id)
+        resume_id = database.insert_resume(f.filename, pdf_bytes, user_id, project_id_val)
         resume_ids.append(resume_id)
         executor.submit(extractor.process_resume, resume_id, ANTHROPIC_API_KEY, database)
         uploaded += 1
@@ -311,6 +336,184 @@ def api_export():
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         as_attachment=True,
         download_name="resume_contacts.xlsx",
+    )
+
+
+@app.route("/api/projects", methods=["GET"])
+@login_required
+def api_get_projects():
+    user_id, role = current_user()
+    return jsonify(database.get_all_projects(user_id, role))
+
+
+@app.route("/api/projects", methods=["POST"])
+@login_required
+def api_create_project():
+    user_id, role = current_user()
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    description = (data.get("description") or "").strip()
+    if not name:
+        return jsonify({"error": "Project name is required"}), 400
+    project = database.create_project(name, description, user_id)
+    if project is None:
+        return jsonify({"error": "Failed to create project"}), 500
+    return jsonify(project), 201
+
+
+@app.route("/api/projects/<int:project_id>", methods=["DELETE"])
+@login_required
+def api_delete_project(project_id):
+    user_id, role = current_user()
+    project = database.get_project_by_id(project_id, user_id, role)
+    if not project:
+        return jsonify({"error": "Not found or access denied"}), 404
+    database.delete_project(project_id)
+    return jsonify({"deleted": project_id})
+
+
+@app.route("/api/projects/<int:project_id>/contacts", methods=["GET"])
+@login_required
+def api_project_contacts(project_id):
+    user_id, role = current_user()
+    project = database.get_project_by_id(project_id, user_id, role)
+    if not project:
+        return jsonify({"error": "Not found"}), 404
+
+    contacts  = database.get_project_contacts(project_id, user_id, role)
+    search    = request.args.get("search", "").lower().strip()
+    location  = request.args.get("location", "").strip()
+    job_title = request.args.get("job_title", "").strip()
+    skill     = request.args.get("skill", "").lower().strip()
+
+    if search:
+        def matches(c):
+            return any(search in (c.get(f) or "").lower() for f in
+                       ["name", "email", "company", "location", "job_title",
+                        "uploaded_by_username"]) or \
+                   search in " ".join(c.get("skills") or []).lower()
+        contacts = [c for c in contacts if matches(c)]
+    if location:
+        contacts = [c for c in contacts if (c.get("location") or "").strip() == location]
+    if job_title:
+        contacts = [c for c in contacts if (c.get("job_title") or "").strip() == job_title]
+    if skill:
+        contacts = [c for c in contacts
+                    if any(skill == s.lower() for s in (c.get("skills") or []))]
+
+    return jsonify(contacts)
+
+
+@app.route("/api/projects/<int:project_id>/filter-options", methods=["GET"])
+@login_required
+def api_project_filter_options(project_id):
+    user_id, role = current_user()
+    project = database.get_project_by_id(project_id, user_id, role)
+    if not project:
+        return jsonify({"error": "Not found"}), 404
+    contacts = database.get_project_contacts(project_id, user_id, role)
+    locations  = sorted({(c.get("location") or "").strip() for c in contacts if c.get("location")})
+    job_titles = sorted({(c.get("job_title") or "").strip() for c in contacts if c.get("job_title")})
+    skills_set = set()
+    for c in contacts:
+        for s in (c.get("skills") or []):
+            if s:
+                skills_set.add(s.strip())
+    return jsonify({"locations": locations, "job_titles": job_titles, "skills": sorted(skills_set)})
+
+
+@app.route("/api/projects/<int:project_id>/export", methods=["GET"])
+@login_required
+def api_project_export(project_id):
+    user_id, role = current_user()
+    project = database.get_project_by_id(project_id, user_id, role)
+    if not project:
+        return jsonify({"error": "Not found"}), 404
+
+    contacts = database.get_project_contacts(project_id, user_id, role)
+    if not contacts:
+        return jsonify({"error": "No contacts in this project yet"}), 404
+
+    rows = []
+    for c in contacts:
+        skills_list = c.get("skills") or []
+        if isinstance(skills_list, str):
+            try:
+                skills_list = json.loads(skills_list)
+            except Exception:
+                skills_list = []
+
+        other = {}
+        try:
+            raw_other = c.get("other_details") or "{}"
+            other = json.loads(raw_other) if isinstance(raw_other, str) else (raw_other or {})
+        except Exception:
+            pass
+
+        row = {
+            "Name":             c.get("name") or "",
+            "Email":            c.get("email") or "",
+            "Phone":            c.get("phone") or "",
+            "LinkedIn":         c.get("linkedin") or "",
+            "Location":         c.get("location") or "",
+            "Job Title":        c.get("job_title") or "",
+            "Company":          c.get("company") or "",
+            "Skills":           ", ".join(skills_list),
+            "GitHub":           other.get("github") or "",
+            "Portfolio":        other.get("portfolio") or "",
+            "Education":        other.get("education") or "",
+            "Years Experience": other.get("years_experience") or "",
+            "Source File":      c.get("original_filename") or "",
+            "Upload Date":      str(c.get("upload_date") or ""),
+            "Extracted At":     str(c.get("extracted_at") or ""),
+        }
+        if role == "superadmin":
+            row["Uploaded By"] = c.get("uploaded_by_username") or ""
+            row["User Role"]   = c.get("uploaded_by_role") or ""
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+    output = io.BytesIO()
+
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, sheet_name="Contacts", index=False)
+        ws = writer.sheets["Contacts"]
+
+        header_fill = PatternFill("solid", fgColor="1F4E79")
+        header_font = Font(bold=True, color="FFFFFF")
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center")
+
+        linkedin_col = None
+        for cell in ws[1]:
+            if cell.value == "LinkedIn":
+                linkedin_col = cell.column_letter
+                break
+        if linkedin_col:
+            for row_cells in ws.iter_rows(
+                min_row=2,
+                min_col=ws[f"{linkedin_col}1"].column,
+                max_col=ws[f"{linkedin_col}1"].column
+            ):
+                cell = row_cells[0]
+                url = cell.value
+                if url and url.startswith("http"):
+                    cell.hyperlink = url
+                    cell.font = Font(color="0563C1", underline="single")
+
+        for col_cells in ws.columns:
+            max_len = max((len(str(cell.value or "")) for cell in col_cells), default=10)
+            ws.column_dimensions[col_cells[0].column_letter].width = min(max_len + 4, 60)
+
+    output.seek(0)
+    safe_name = "".join(c for c in project["name"] if c.isalnum() or c in " _-").strip()
+    return send_file(
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=f"{safe_name}_contacts.xlsx",
     )
 
 

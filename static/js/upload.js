@@ -10,6 +10,28 @@ const progressBar  = document.getElementById('progress-bar');
 const progressMsg  = document.getElementById('progress-msg');
 const resultAlert  = document.getElementById('result-alert');
 const queueStatus  = document.getElementById('queue-status');
+const projectSel  = document.getElementById('project-select');
+
+// ── Load Projects ──────────────────────────────────────────────────────────
+
+async function loadProjectOptions() {
+  try {
+    const res = await fetch('/api/projects');
+    const projects = await res.json();
+    if (!projects.length) return;
+    projects.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name;
+      projectSel.appendChild(opt);
+    });
+    // Pre-select if ?project_id= is in URL
+    const urlParam = new URLSearchParams(window.location.search).get('project_id');
+    if (urlParam) projectSel.value = urlParam;
+  } catch (e) { /* ignore — project selector is optional */ }
+}
+
+loadProjectOptions();
 
 let selectedFiles = [];
 
@@ -85,6 +107,7 @@ uploadBtn.addEventListener('click', async () => {
 
   const formData = new FormData();
   selectedFiles.forEach(f => formData.append('files', f));
+  if (projectSel.value) formData.append('project_id', projectSel.value);
 
   try {
     const res = await fetch('/api/upload', { method: 'POST', body: formData });
