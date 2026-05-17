@@ -3,7 +3,17 @@ import os
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if DATABASE_URL:
-    # PostgreSQL schema
+    USERS_TABLE = """
+    CREATE TABLE IF NOT EXISTS users (
+        id            SERIAL PRIMARY KEY,
+        username      TEXT NOT NULL UNIQUE,
+        email         TEXT,
+        password_hash TEXT NOT NULL,
+        role          TEXT NOT NULL DEFAULT 'customer'
+                      CHECK (role IN ('superadmin', 'reseller', 'customer')),
+        created_at    TIMESTAMP DEFAULT NOW()
+    );
+    """
     RESUMES_TABLE = """
     CREATE TABLE IF NOT EXISTS resumes (
         id                SERIAL PRIMARY KEY,
@@ -12,7 +22,8 @@ if DATABASE_URL:
         upload_date       TIMESTAMP DEFAULT NOW(),
         status            TEXT NOT NULL DEFAULT 'pending',
         raw_text          TEXT,
-        error_message     TEXT
+        error_message     TEXT,
+        user_id           INTEGER REFERENCES users(id)
     );
     """
     CONTACTS_TABLE = """
@@ -32,7 +43,17 @@ if DATABASE_URL:
     );
     """
 else:
-    # SQLite schema
+    USERS_TABLE = """
+    CREATE TABLE IF NOT EXISTS users (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        username      TEXT NOT NULL UNIQUE,
+        email         TEXT,
+        password_hash TEXT NOT NULL,
+        role          TEXT NOT NULL DEFAULT 'customer'
+                      CHECK (role IN ('superadmin', 'reseller', 'customer')),
+        created_at    DATETIME DEFAULT (datetime('now', 'localtime'))
+    );
+    """
     RESUMES_TABLE = """
     CREATE TABLE IF NOT EXISTS resumes (
         id                INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,7 +62,8 @@ else:
         upload_date       DATETIME DEFAULT (datetime('now', 'localtime')),
         status            TEXT NOT NULL DEFAULT 'pending',
         raw_text          TEXT,
-        error_message     TEXT
+        error_message     TEXT,
+        user_id           INTEGER REFERENCES users(id)
     );
     """
     CONTACTS_TABLE = """
@@ -65,4 +87,6 @@ INDEX_STATEMENTS = [
     "CREATE INDEX IF NOT EXISTS idx_contacts_resume_id ON contacts(resume_id);",
     "CREATE INDEX IF NOT EXISTS idx_resumes_status ON resumes(status);",
     "CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);",
+    "CREATE INDEX IF NOT EXISTS idx_resumes_user_id ON resumes(user_id);",
+    "CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);",
 ]

@@ -51,7 +51,7 @@
   </div>
 </div>
 
-<!-- Toolbar -->
+<!-- Search + Buttons -->
 <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
   <div class="input-group flex-grow-1" style="max-width:380px">
     <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
@@ -71,7 +71,7 @@
   </div>
 </div>
 
-<!-- Filter Row -->
+<!-- Filters -->
 <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
   <i class="bi bi-funnel text-muted"></i>
   <select id="filter-location" class="form-select form-select-sm w-auto">
@@ -105,11 +105,15 @@
             <th>Skills</th>
             <th>Links</th>
             <th>Source</th>
+            {% if session.role == 'superadmin' %}
+              <th>Uploaded By</th>
+            {% endif %}
             <th></th>
           </tr>
         </thead>
         <tbody id="contacts-tbody">
-          <tr><td colspan="11" class="text-center text-muted py-5">
+          <tr><td colspan="{{ 12 if session.role == 'superadmin' else 11 }}"
+                  class="text-center text-muted py-5">
             <div class="spinner-border spinner-border-sm me-2"></div>Loading contacts...
           </td></tr>
         </tbody>
@@ -119,12 +123,13 @@
   <div class="card-footer text-muted small" id="table-footer"></div>
 </div>
 
-<!-- Failed Resumes Accordion (shown when there are failures) -->
+<!-- Failed Resumes -->
 <div id="failed-section" class="mt-3 d-none">
   <div class="accordion" id="failedAccordion">
     <div class="accordion-item border-danger">
       <h2 class="accordion-header">
-        <button class="accordion-button collapsed text-danger" type="button" data-bs-toggle="collapse" data-bs-target="#failedList">
+        <button class="accordion-button collapsed text-danger" type="button"
+                data-bs-toggle="collapse" data-bs-target="#failedList">
           <i class="bi bi-exclamation-triangle me-2"></i>Failed Extractions
         </button>
       </h2>
@@ -143,5 +148,8 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+  window.IS_SUPERADMIN = {{ 'true' if session.role == 'superadmin' else 'false' }};
+</script>
 <script src="/static/js/dashboard.js"></script>
 {% endblock %}

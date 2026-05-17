@@ -69,32 +69,146 @@ else:
 def init_db():
     conn = get_conn()
     cur = conn.cursor()
+
+    # Users must be created before resumes (FK dependency)
+    cur.execute(models.USERS_TABLE)
     cur.execute(models.RESUMES_TABLE)
     cur.execute(models.CONTACTS_TABLE)
+
+    # Migration: add user_id to existing resumes tables
+    if DATABASE_URL:
+        cur.execute("ALTER TABLE resumes ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);")
+    else:
+        try:
+            cur.execute("ALTER TABLE resumes ADD COLUMN user_id INTEGER REFERENCES users(id);")
+        except Exception:
+            pass  # column already exists
+
     for stmt in models.INDEX_STATEMENTS:
         try:
             cur.execute(stmt)
         except Exception:
             pass
+
     conn.commit()
+    _seed_superadmin(conn)
     conn.close()
     print("Database initialized.")
 
 
-# ── Resumes ───────────────────────────────────────────────────────────────────
+def _seed_superadmin(conn):
+    from werkzeug.security import generate_password_hash
+    cur = conn.cursor()
+    cur.execute(f"SELECT id FROM users WHERE username = {P}", ("admin",))
+    if _row(cur) is None:
+        cur.execute(
+            f"INSERT INTO users (username, email, password_hash, role) VALUES ({P},{P},{P},{P})",
+            ("admin", "admin@localhost", generate_password_hash("Admin@123"), "superadmin"),
+        )
+        conn.commit()
+        print("Default superadmin created — username: admin  password: Admin@123")
 
-def insert_resume(original_filename: str, pdf_bytes: bytes) -> int:
+
+# ── User CRUD ─────────────────────────────────────────────────────────────────
+
+def create_user(username: str, email: str, password: str, role: str):
+    from werkzeug.security import generate_password_hash
+    conn = get_conn()
+    cur = conn.cursor()
+    try:
+        if DATABASE_URL:
+            cur.execute(
+                f"INSERT INTO users (username, email, password_hash, role) VALUES ({P},{P},{P},{P}) RETURNING id",
+                (username, email or None, generate_password_hash(password), role),
+            )
+            new_id = cur.fetchone()[0]
+        else:
+            cur.execute(
+                f"INSERT INTO users (username, email, password_hash, role) VALUES ({P},{P},{P},{P})",
+                (username, email or None, generate_password_hash(password), role),
+            )
+            new_id = cur.lastrowid
+        conn.commit()
+        return {"id": new_id, "username": username, "role": role}
+    except Exception:
+        conn.rollback()
+        return None
+    finally:
+        conn.close()
+
+
+def get_user_by_username(username: str):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
-        f"INSERT INTO resumes (original_filename, file_data) VALUES ({P}, {P}) RETURNING id"
-        if DATABASE_URL else
-        f"INSERT INTO resumes (original_filename, file_data) VALUES ({P}, {P})",
-        (original_filename, _binary(pdf_bytes)),
+        f"SELECT id, username, email, password_hash, role, created_at FROM users WHERE username={P}",
+        (username,),
     )
+    result = _row(cur)
+    conn.close()
+    return result
+
+
+def get_user_by_id(user_id: int):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        f"SELECT id, username, email, role, created_at FROM users WHERE id={P}",
+        (user_id,),
+    )
+    result = _row(cur)
+    conn.close()
+    return result
+
+
+def get_all_users() -> list:
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT id, username, email, role, created_at FROM users ORDER BY created_at ASC")
+    rows = _rows(cur)
+    conn.close()
+    for r in rows:
+        if r.get("created_at") and not isinstance(r["created_at"], str):
+            r["created_at"] = str(r["created_at"])
+    return rows
+
+
+def delete_user(user_id: int):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(f"DELETE FROM users WHERE id={P}", (user_id,))
+    conn.commit()
+    conn.close()
+
+
+def update_user_password(user_id: int, new_password: str):
+    from werkzeug.security import generate_password_hash
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        f"UPDATE users SET password_hash={P} WHERE id={P}",
+        (generate_password_hash(new_password), user_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+# ── Resumes ───────────────────────────────────────────────────────────────────
+
+def insert_resume(original_filename: str, pdf_bytes: bytes, user_id: int = None) -> int:
+    conn = get_conn()
+    cur = conn.cursor()
     if DATABASE_URL:
+        cur.execute(
+            f"INSERT INTO resumes (original_filename, file_data, user_id) VALUES ({P},{P},{P}) RETURNING id",
+            (original_filename, _binary(pdf_bytes), user_id),
+        )
         row_id = cur.fetchone()[0]
     else:
+        cur.execute(
+            f"INSERT INTO resumes (original_filename, file_data, user_id) VALUES ({P},{P},{P})",
+            (original_filename, _binary(pdf_bytes), user_id),
+        )
         row_id = cur.lastrowid
     conn.commit()
     conn.close()
@@ -123,10 +237,19 @@ def get_pdf_bytes(resume_id: int):
     return bytes(row[0])
 
 
-def get_resume_by_id(resume_id: int):
+def get_resume_by_id(resume_id: int, user_id: int = None, role: str = None):
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute(f"SELECT id, original_filename, upload_date, status, error_message FROM resumes WHERE id={P}", (resume_id,))
+    if role == "superadmin":
+        cur.execute(
+            f"SELECT id, original_filename, upload_date, status, error_message, user_id FROM resumes WHERE id={P}",
+            (resume_id,),
+        )
+    else:
+        cur.execute(
+            f"SELECT id, original_filename, upload_date, status, error_message, user_id FROM resumes WHERE id={P} AND user_id={P}",
+            (resume_id, user_id),
+        )
     result = _row(cur)
     conn.close()
     return result
@@ -167,27 +290,45 @@ def insert_contact(resume_id: int, fields: dict):
     conn.close()
 
 
-def get_all_contacts() -> list:
+def get_all_contacts(user_id: int = None, role: str = None) -> list:
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute(
-        """SELECT c.id, c.resume_id, c.name, c.email, c.phone, c.linkedin,
-                  c.location, c.job_title, c.company, c.skills, c.other_details,
-                  c.extracted_at,
-                  r.original_filename, r.upload_date, r.status
-           FROM contacts c
-           JOIN resumes r ON c.resume_id = r.id
-           ORDER BY c.extracted_at DESC"""
-    )
+
+    if role == "superadmin":
+        cur.execute(
+            """SELECT c.id, c.resume_id, c.name, c.email, c.phone, c.linkedin,
+                      c.location, c.job_title, c.company, c.skills, c.other_details,
+                      c.extracted_at,
+                      r.original_filename, r.upload_date, r.status,
+                      u.username AS uploaded_by_username,
+                      u.role     AS uploaded_by_role
+               FROM contacts c
+               JOIN resumes r ON c.resume_id = r.id
+               LEFT JOIN users u ON r.user_id = u.id
+               ORDER BY c.extracted_at DESC"""
+        )
+    else:
+        cur.execute(
+            f"""SELECT c.id, c.resume_id, c.name, c.email, c.phone, c.linkedin,
+                       c.location, c.job_title, c.company, c.skills, c.other_details,
+                       c.extracted_at,
+                       r.original_filename, r.upload_date, r.status
+                FROM contacts c
+                JOIN resumes r ON c.resume_id = r.id
+                WHERE r.user_id = {P}
+                ORDER BY c.extracted_at DESC""",
+            (user_id,),
+        )
+
     rows = _rows(cur)
     conn.close()
+
     result = []
     for d in rows:
         try:
             d["skills"] = json.loads(d["skills"]) if d["skills"] else []
         except (json.JSONDecodeError, TypeError):
             d["skills"] = []
-        # Convert datetime objects to strings for JSON serialisation
         for key in ("extracted_at", "upload_date"):
             if d.get(key) and not isinstance(d[key], str):
                 d[key] = str(d[key])
@@ -195,32 +336,66 @@ def get_all_contacts() -> list:
     return result
 
 
-def get_processing_status() -> dict:
+def get_processing_status(user_id: int = None, role: str = None) -> dict:
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute(
-        """SELECT
-               COALESCE(SUM(CASE WHEN status='pending'    THEN 1 ELSE 0 END),0) AS pending,
-               COALESCE(SUM(CASE WHEN status='processing' THEN 1 ELSE 0 END),0) AS processing,
-               COALESCE(SUM(CASE WHEN status='done'       THEN 1 ELSE 0 END),0) AS done,
-               COALESCE(SUM(CASE WHEN status='failed'     THEN 1 ELSE 0 END),0) AS failed,
-               COUNT(*) AS total
-           FROM resumes"""
-    )
+
+    if role == "superadmin":
+        cur.execute(
+            """SELECT
+                   COALESCE(SUM(CASE WHEN status='pending'    THEN 1 ELSE 0 END),0) AS pending,
+                   COALESCE(SUM(CASE WHEN status='processing' THEN 1 ELSE 0 END),0) AS processing,
+                   COALESCE(SUM(CASE WHEN status='done'       THEN 1 ELSE 0 END),0) AS done,
+                   COALESCE(SUM(CASE WHEN status='failed'     THEN 1 ELSE 0 END),0) AS failed,
+                   COUNT(*) AS total
+               FROM resumes"""
+        )
+    else:
+        cur.execute(
+            f"""SELECT
+                   COALESCE(SUM(CASE WHEN status='pending'    THEN 1 ELSE 0 END),0) AS pending,
+                   COALESCE(SUM(CASE WHEN status='processing' THEN 1 ELSE 0 END),0) AS processing,
+                   COALESCE(SUM(CASE WHEN status='done'       THEN 1 ELSE 0 END),0) AS done,
+                   COALESCE(SUM(CASE WHEN status='failed'     THEN 1 ELSE 0 END),0) AS failed,
+                   COUNT(*) AS total
+               FROM resumes WHERE user_id = {P}""",
+            (user_id,),
+        )
+
     row = _row(cur)
     conn.close()
     return row or {"pending": 0, "processing": 0, "done": 0, "failed": 0, "total": 0}
 
 
-def get_failed_resumes() -> list:
+def get_failed_resumes(user_id: int = None, role: str = None) -> list:
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute(
-        "SELECT id, original_filename, upload_date, error_message FROM resumes WHERE status='failed' ORDER BY upload_date DESC"
-    )
+
+    if role == "superadmin":
+        cur.execute(
+            "SELECT id, original_filename, upload_date, error_message FROM resumes WHERE status='failed' ORDER BY upload_date DESC"
+        )
+    else:
+        cur.execute(
+            f"SELECT id, original_filename, upload_date, error_message FROM resumes WHERE status='failed' AND user_id={P} ORDER BY upload_date DESC",
+            (user_id,),
+        )
+
     rows = _rows(cur)
     conn.close()
     for r in rows:
         if r.get("upload_date") and not isinstance(r["upload_date"], str):
             r["upload_date"] = str(r["upload_date"])
     return rows
+
+
+def get_filter_options(user_id: int = None, role: str = None) -> dict:
+    contacts = get_all_contacts(user_id, role)
+    locations  = sorted({(c.get("location") or "").strip() for c in contacts if c.get("location")})
+    job_titles = sorted({(c.get("job_title") or "").strip() for c in contacts if c.get("job_title")})
+    skills_set = set()
+    for c in contacts:
+        for s in (c.get("skills") or []):
+            if s:
+                skills_set.add(s.strip())
+    return {"locations": locations, "job_titles": job_titles, "skills": sorted(skills_set)}

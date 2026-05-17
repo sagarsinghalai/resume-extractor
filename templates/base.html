@@ -10,21 +10,66 @@
 </head>
 <body class="bg-light">
 
-<nav class="navbar navbar-expand-lg navbar-dark shadow-sm" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);">
+<nav class="navbar navbar-expand-lg navbar-dark shadow-sm"
+     style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);">
   <div class="container-fluid px-4">
     <a class="navbar-brand fw-bold fs-5" href="/">
       <i class="bi bi-file-person-fill me-2 text-info"></i>Resume Extractor
     </a>
-    <div class="navbar-nav ms-auto flex-row gap-2">
-      <a class="nav-link text-white px-3 py-2 rounded {% if request.path == '/' %}bg-white bg-opacity-10{% endif %}" href="/">
-        <i class="bi bi-grid-3x3-gap me-1"></i>Dashboard
-      </a>
-      <a class="nav-link text-white px-3 py-2 rounded {% if request.path == '/upload' %}bg-white bg-opacity-10{% endif %}" href="/upload">
-        <i class="bi bi-cloud-upload me-1"></i>Upload
-      </a>
+
+    <div class="navbar-nav ms-auto flex-row align-items-center gap-1">
+      {% if session.user_id %}
+        <a class="nav-link text-white px-3 py-2 rounded
+                  {% if request.path == '/' %}bg-white bg-opacity-10{% endif %}" href="/">
+          <i class="bi bi-grid-3x3-gap me-1"></i>Dashboard
+        </a>
+        <a class="nav-link text-white px-3 py-2 rounded
+                  {% if request.path == '/upload' %}bg-white bg-opacity-10{% endif %}" href="/upload">
+          <i class="bi bi-cloud-upload me-1"></i>Upload
+        </a>
+        {% if session.role == 'superadmin' %}
+          <a class="nav-link text-white px-3 py-2 rounded
+                    {% if '/admin' in request.path %}bg-white bg-opacity-10{% endif %}"
+             href="/admin/users">
+            <i class="bi bi-people-fill me-1"></i>Users
+          </a>
+        {% endif %}
+
+        <!-- User badge + logout -->
+        <div class="d-flex align-items-center gap-2 ms-3 ps-3 border-start border-secondary">
+          <div class="d-flex flex-column align-items-end lh-1">
+            <span class="text-white small fw-semibold">{{ session.username }}</span>
+            {% if session.role == 'superadmin' %}
+              <span class="badge bg-danger mt-1" style="font-size:0.65rem">Superadmin</span>
+            {% elif session.role == 'reseller' %}
+              <span class="badge bg-warning text-dark mt-1" style="font-size:0.65rem">Reseller</span>
+            {% else %}
+              <span class="badge bg-info text-dark mt-1" style="font-size:0.65rem">Customer</span>
+            {% endif %}
+          </div>
+          <form method="POST" action="/logout" class="m-0">
+            <button type="submit" class="btn btn-sm btn-outline-light px-2">
+              <i class="bi bi-box-arrow-right"></i>
+            </button>
+          </form>
+        </div>
+      {% endif %}
     </div>
   </div>
 </nav>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="container-fluid px-4 pt-3">
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show rounded-3" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
 
 <div class="container-fluid py-4 px-4">
   {% block content %}{% endblock %}

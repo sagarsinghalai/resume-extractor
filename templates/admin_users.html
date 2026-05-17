@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}User Management — Resume Extractor{% endblock %}
+
+{% block content %}
+
+<div class="d-flex align-items-center mb-4">
+  <h4 class="fw-bold mb-0">
+    <i class="bi bi-people-fill me-2 text-primary"></i>User Management
+  </h4>
+  <span class="ms-auto badge bg-secondary fs-6">{{ users|length }} user{{ 's' if users|length != 1 else '' }}</span>
+</div>
+
+<!-- Create User -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header border-0 py-3 px-4 fw-semibold text-white"
+       style="background: linear-gradient(135deg,#0f3460,#1a73e8)">
+    <i class="bi bi-person-plus me-2"></i>Create New User
+  </div>
+  <div class="card-body p-4">
+    <form method="POST" action="/admin/users/create" class="row g-3 align-items-end">
+      <div class="col-12 col-md-3">
+        <label class="form-label small fw-semibold">Username <span class="text-danger">*</span></label>
+        <input type="text" name="username" class="form-control" required placeholder="e.g. john_doe">
+      </div>
+      <div class="col-12 col-md-3">
+        <label class="form-label small fw-semibold">Email</label>
+        <input type="email" name="email" class="form-control" placeholder="optional">
+      </div>
+      <div class="col-12 col-md-2">
+        <label class="form-label small fw-semibold">Role <span class="text-danger">*</span></label>
+        <select name="role" class="form-select">
+          <option value="customer">Customer</option>
+          <option value="reseller">Reseller</option>
+          <option value="superadmin">Superadmin</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-3">
+        <label class="form-label small fw-semibold">Password <span class="text-danger">*</span></label>
+        <input type="password" name="password" class="form-control" required placeholder="Set a password">
+      </div>
+      <div class="col-12 col-md-1">
+        <button type="submit" class="btn btn-primary w-100" title="Create user">
+          <i class="bi bi-plus-lg"></i>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Users Table -->
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th class="ps-3">#</th>
+            <th>Username</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Created</th>
+            <th>Reset Password</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          <tr>
+            <td class="ps-3 text-muted small">{{ loop.index }}</td>
+            <td class="fw-semibold">
+              {{ u.username }}
+              {% if u.id == session.user_id %}
+                <span class="badge bg-success ms-1 small">You</span>
+              {% endif %}
+            </td>
+            <td class="text-muted small">{{ u.email or '—' }}</td>
+            <td>
+              {% if u.role == 'superadmin' %}
+                <span class="badge bg-danger">Superadmin</span>
+              {% elif u.role == 'reseller' %}
+                <span class="badge bg-warning text-dark">Reseller</span>
+              {% else %}
+                <span class="badge bg-info text-dark">Customer</span>
+              {% endif %}
+            </td>
+            <td class="text-muted small">{{ (u.created_at or '—')[:16] }}</td>
+            <td>
+              <form method="POST" action="/admin/users/{{ u.id }}/change-password"
+                    class="d-flex gap-2 align-items-center">
+                <input type="password" name="new_password" class="form-control form-control-sm"
+                       placeholder="New password" style="max-width:160px" required>
+                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Update password">
+                  <i class="bi bi-key"></i>
+                </button>
+              </form>
+            </td>
+            <td>
+              {% if u.id != session.user_id %}
+                <form method="POST" action="/admin/users/{{ u.id }}/delete"
+                      onsubmit="return confirm('Delete user {{ u.username }}? This cannot be undone.')">
+                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete user">
+                    <i class="bi bi-trash3"></i>
+                  </button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" class="text-center py-4 text-muted">No users found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,12 +1,14 @@
 import os
 import io
-import uuid
 import json
 from pathlib import Path
+from functools import wraps
 from concurrent.futures import ThreadPoolExecutor
 
-from flask import Flask, request, jsonify, render_template, send_file
+from flask import (Flask, request, jsonify, render_template, send_file,
+                   session, redirect, url_for, flash)
 from dotenv import load_dotenv
+from werkzeug.security import check_password_hash
 import pandas as pd
 from openpyxl.styles import Font, PatternFill, Alignment
 
@@ -16,39 +18,149 @@ import extractor
 load_dotenv(Path(__file__).parent / ".env", override=True)
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # 100 MB
+app.secret_key = os.getenv("SECRET_KEY") or os.urandom(32)
+app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-
 executor = ThreadPoolExecutor(max_workers=3)
 
-# Initialize database at startup (runs with both gunicorn and direct python)
 database.init_db()
+
+
+# ── Auth helpers ──────────────────────────────────────────────────────────────
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+def superadmin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect(url_for("login"))
+        if session.get("role") != "superadmin":
+            return "Forbidden — superadmin only.", 403
+        return f(*args, **kwargs)
+    return decorated
+
+
+def current_user():
+    return session.get("user_id"), session.get("role")
 
 
 def allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() == "pdf"
 
 
-# ── Page Routes ───────────────────────────────────────────────────────────────
+# ── Auth routes ───────────────────────────────────────────────────────────────
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if "user_id" in session:
+        return redirect(url_for("dashboard"))
+    error = None
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        user = database.get_user_by_username(username)
+        if user and check_password_hash(user["password_hash"], password):
+            session.clear()
+            session["user_id"]  = user["id"]
+            session["username"] = user["username"]
+            session["role"]     = user["role"]
+            return redirect(url_for("dashboard"))
+        error = "Invalid username or password."
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+# ── Page routes ───────────────────────────────────────────────────────────────
 
 @app.route("/")
+@login_required
 def dashboard():
     return render_template("dashboard.html")
 
 
 @app.route("/upload")
+@login_required
 def upload_page():
     return render_template("upload.html")
 
 
-# ── API Routes ────────────────────────────────────────────────────────────────
+# ── Superadmin: user management ───────────────────────────────────────────────
+
+@app.route("/admin/users")
+@superadmin_required
+def admin_users():
+    users = database.get_all_users()
+    return render_template("admin_users.html", users=users)
+
+
+@app.route("/admin/users/create", methods=["POST"])
+@superadmin_required
+def admin_create_user():
+    username = request.form.get("username", "").strip()
+    email    = request.form.get("email", "").strip()
+    password = request.form.get("password", "")
+    role     = request.form.get("role", "customer")
+
+    if role not in ("superadmin", "reseller", "customer"):
+        flash("Invalid role.", "danger")
+        return redirect(url_for("admin_users"))
+    if not username or not password:
+        flash("Username and password are required.", "danger")
+        return redirect(url_for("admin_users"))
+
+    result = database.create_user(username, email, password, role)
+    if result is None:
+        flash(f"Username '{username}' already exists.", "danger")
+    else:
+        flash(f"User '{username}' ({role}) created successfully.", "success")
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/users/<int:user_id>/delete", methods=["POST"])
+@superadmin_required
+def admin_delete_user(user_id):
+    if user_id == session["user_id"]:
+        flash("You cannot delete your own account.", "danger")
+        return redirect(url_for("admin_users"))
+    database.delete_user(user_id)
+    flash("User deleted.", "success")
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/users/<int:user_id>/change-password", methods=["POST"])
+@superadmin_required
+def admin_change_password(user_id):
+    new_password = request.form.get("new_password", "")
+    if not new_password:
+        flash("Password cannot be empty.", "danger")
+        return redirect(url_for("admin_users"))
+    database.update_user_password(user_id, new_password)
+    flash("Password updated successfully.", "success")
+    return redirect(url_for("admin_users"))
+
+
+# ── API routes ────────────────────────────────────────────────────────────────
 
 @app.route("/api/upload", methods=["POST"])
+@login_required
 def api_upload():
+    user_id, role = current_user()
     if "files" not in request.files:
         return jsonify({"error": "No files in request"}), 400
-
     if not ANTHROPIC_API_KEY:
         return jsonify({"error": "ANTHROPIC_API_KEY not configured on server"}), 500
 
@@ -59,11 +171,9 @@ def api_upload():
         if not f.filename or not allowed_file(f.filename):
             skipped += 1
             continue
-
         pdf_bytes = f.read()
-        resume_id = database.insert_resume(f.filename, pdf_bytes)
+        resume_id = database.insert_resume(f.filename, pdf_bytes, user_id)
         resume_ids.append(resume_id)
-
         executor.submit(extractor.process_resume, resume_id, ANTHROPIC_API_KEY, database)
         uploaded += 1
 
@@ -71,8 +181,10 @@ def api_upload():
 
 
 @app.route("/api/contacts", methods=["GET"])
+@login_required
 def api_contacts():
-    contacts = database.get_all_contacts()
+    user_id, role = current_user()
+    contacts  = database.get_all_contacts(user_id, role)
     search    = request.args.get("search", "").lower().strip()
     location  = request.args.get("location", "").strip()
     job_title = request.args.get("job_title", "").strip()
@@ -81,16 +193,15 @@ def api_contacts():
     if search:
         def matches(c):
             return any(search in (c.get(f) or "").lower() for f in
-                       ["name", "email", "company", "location", "job_title"]) or \
+                       ["name", "email", "company", "location", "job_title",
+                        "uploaded_by_username"]) or \
                    search in " ".join(c.get("skills") or []).lower()
         contacts = [c for c in contacts if matches(c)]
 
     if location:
         contacts = [c for c in contacts if (c.get("location") or "").strip() == location]
-
     if job_title:
         contacts = [c for c in contacts if (c.get("job_title") or "").strip() == job_title]
-
     if skill:
         contacts = [c for c in contacts
                     if any(skill == s.lower() for s in (c.get("skills") or []))]
@@ -99,28 +210,24 @@ def api_contacts():
 
 
 @app.route("/api/filter-options", methods=["GET"])
+@login_required
 def api_filter_options():
-    """Returns unique locations, job titles and skills for populating filter dropdowns."""
-    contacts = database.get_all_contacts()
-    locations  = sorted({(c.get("location") or "").strip() for c in contacts if c.get("location")})
-    job_titles = sorted({(c.get("job_title") or "").strip() for c in contacts if c.get("job_title")})
-    skills_set = set()
-    for c in contacts:
-        for s in (c.get("skills") or []):
-            if s:
-                skills_set.add(s.strip())
-    skills = sorted(skills_set)
-    return jsonify({"locations": locations, "job_titles": job_titles, "skills": skills})
+    user_id, role = current_user()
+    return jsonify(database.get_filter_options(user_id, role))
 
 
 @app.route("/api/status", methods=["GET"])
+@login_required
 def api_status():
-    return jsonify(database.get_processing_status())
+    user_id, role = current_user()
+    return jsonify(database.get_processing_status(user_id, role))
 
 
 @app.route("/api/export", methods=["GET"])
+@login_required
 def api_export():
-    contacts = database.get_all_contacts()
+    user_id, role = current_user()
+    contacts = database.get_all_contacts(user_id, role)
     if not contacts:
         return jsonify({"error": "No contacts to export yet"}), 404
 
@@ -140,7 +247,7 @@ def api_export():
         except Exception:
             pass
 
-        rows.append({
+        row = {
             "Name":             c.get("name") or "",
             "Email":            c.get("email") or "",
             "Phone":            c.get("phone") or "",
@@ -156,7 +263,11 @@ def api_export():
             "Source File":      c.get("original_filename") or "",
             "Upload Date":      str(c.get("upload_date") or ""),
             "Extracted At":     str(c.get("extracted_at") or ""),
-        })
+        }
+        if role == "superadmin":
+            row["Uploaded By"] = c.get("uploaded_by_username") or ""
+            row["User Role"]   = c.get("uploaded_by_role") or ""
+        rows.append(row)
 
     df = pd.DataFrame(rows)
     output = io.BytesIO()
@@ -165,7 +276,6 @@ def api_export():
         df.to_excel(writer, sheet_name="Contacts", index=False)
         ws = writer.sheets["Contacts"]
 
-        # Style header row
         header_fill = PatternFill("solid", fgColor="1F4E79")
         header_font = Font(bold=True, color="FFFFFF")
         for cell in ws[1]:
@@ -174,23 +284,23 @@ def api_export():
             cell.alignment = Alignment(horizontal="center")
 
         # Make LinkedIn cells clickable hyperlinks
-        from openpyxl.styles import colors
         linkedin_col = None
         for cell in ws[1]:
             if cell.value == "LinkedIn":
                 linkedin_col = cell.column_letter
                 break
         if linkedin_col:
-            for row in ws.iter_rows(min_row=2, min_col=ws[f"{linkedin_col}1"].column,
-                                     max_col=ws[f"{linkedin_col}1"].column):
-                cell = row[0]
+            for row_cells in ws.iter_rows(
+                min_row=2,
+                min_col=ws[f"{linkedin_col}1"].column,
+                max_col=ws[f"{linkedin_col}1"].column
+            ):
+                cell = row_cells[0]
                 url = cell.value
                 if url and url.startswith("http"):
                     cell.hyperlink = url
-                    cell.value = url
                     cell.font = Font(color="0563C1", underline="single")
 
-        # Auto-fit column widths
         for col_cells in ws.columns:
             max_len = max((len(str(cell.value or "")) for cell in col_cells), default=10)
             ws.column_dimensions[col_cells[0].column_letter].width = min(max_len + 4, 60)
@@ -205,13 +315,17 @@ def api_export():
 
 
 @app.route("/api/resumes/failed", methods=["GET"])
+@login_required
 def api_failed():
-    return jsonify(database.get_failed_resumes())
+    user_id, role = current_user()
+    return jsonify(database.get_failed_resumes(user_id, role))
 
 
 @app.route("/api/resumes/<int:resume_id>", methods=["DELETE"])
+@login_required
 def api_delete_resume(resume_id):
-    resume = database.get_resume_by_id(resume_id)
+    user_id, role = current_user()
+    resume = database.get_resume_by_id(resume_id, user_id, role)
     if not resume:
         return jsonify({"error": "Not found"}), 404
     database.delete_resume(resume_id)
@@ -219,9 +333,10 @@ def api_delete_resume(resume_id):
 
 
 @app.route("/uploads/<int:resume_id>")
+@login_required
 def serve_pdf(resume_id):
-    """Serve PDF directly from the database."""
-    resume = database.get_resume_by_id(resume_id)
+    user_id, role = current_user()
+    resume = database.get_resume_by_id(resume_id, user_id, role)
     if not resume:
         return "Not found", 404
     pdf_bytes = database.get_pdf_bytes(resume_id)
@@ -238,7 +353,6 @@ def serve_pdf(resume_id):
 # ── Startup ───────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    database.init_db()
     if not ANTHROPIC_API_KEY:
         print("\nWARNING: ANTHROPIC_API_KEY not set.\n")
     print("Starting Resume Extractor at http://localhost:5000")

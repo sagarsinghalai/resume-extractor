@@ -2,6 +2,7 @@
 
 const POLL_MS = 2500;
 let pollTimer = null;
+const COL_SPAN = window.IS_SUPERADMIN ? 12 : 11;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,12 @@ function parseSkills(raw) {
   try { return JSON.parse(raw); } catch { return []; }
 }
 
+function roleBadge(role) {
+  if (role === 'superadmin') return '<span class="badge bg-danger ms-1" style="font-size:0.65rem">admin</span>';
+  if (role === 'reseller')   return '<span class="badge bg-warning text-dark ms-1" style="font-size:0.65rem">reseller</span>';
+  return '<span class="badge bg-info text-dark ms-1" style="font-size:0.65rem">customer</span>';
+}
+
 // ── Stats ──────────────────────────────────────────────────────────────────
 
 async function fetchStats() {
@@ -42,7 +49,7 @@ async function fetchStats() {
 
     if ((d.pending ?? 0) + (d.processing ?? 0) > 0) {
       fetchContacts();
-      fetchFilterOptions(); // refresh dropdowns as new resumes finish
+      fetchFilterOptions();
     }
     if ((d.failed ?? 0) > 0) fetchFailed();
   } catch (e) {
@@ -58,8 +65,7 @@ async function fetchFailed() {
     const data = await res.json();
     if (!data.length) return;
     document.getElementById('failed-section').classList.remove('d-none');
-    const tbody = document.getElementById('failed-tbody');
-    tbody.innerHTML = data.map(r => `
+    document.getElementById('failed-tbody').innerHTML = data.map(r => `
       <tr>
         <td class="ps-3">${esc(r.original_filename)}</td>
         <td class="text-muted small">${esc(r.upload_date)}</td>
@@ -74,20 +80,17 @@ async function fetchFilterOptions() {
   try {
     const res = await fetch('/api/filter-options');
     const { locations, job_titles, skills } = await res.json();
-
     populateSelect('filter-location',  locations,  'All Locations');
     populateSelect('filter-job-title', job_titles, 'All Job Titles');
     populateSelect('filter-skill',     skills,     'All Skills');
-  } catch (e) {
-    console.warn('Filter options error', e);
-  }
+  } catch (e) { console.warn('Filter options error', e); }
 }
 
 function populateSelect(id, values, placeholder) {
   const sel = document.getElementById(id);
-  const current = sel.value; // preserve current selection
+  const current = sel.value;
   sel.innerHTML = `<option value="">${placeholder}</option>`
-    + values.map(v => `<option value="${esc(v)}" ${v === current ? 'selected' : ''}>${esc(v)}</option>`).join('');
+    + values.map(v => `<option value="${esc(v)}"${v === current ? ' selected' : ''}>${esc(v)}</option>`).join('');
 }
 
 // ── Contacts Table ─────────────────────────────────────────────────────────
@@ -104,16 +107,14 @@ async function fetchContacts() {
   if (jobTitle) params.set('job_title', jobTitle);
   if (skill)    params.set('skill',     skill);
 
-  const hasFilters = search || location || jobTitle || skill;
-  document.getElementById('clear-filters-btn').classList.toggle('d-none', !hasFilters);
+  document.getElementById('clear-filters-btn')
+    .classList.toggle('d-none', !(search || location || jobTitle || skill));
 
   try {
     const res = await fetch('/api/contacts?' + params.toString());
     const contacts = await res.json();
     renderTable(contacts);
-  } catch (e) {
-    console.warn('Contacts error', e);
-  }
+  } catch (e) { console.warn('Contacts error', e); }
 }
 
 function renderTable(contacts) {
@@ -122,7 +123,7 @@ function renderTable(contacts) {
 
   if (!contacts.length) {
     tbody.innerHTML = `
-      <tr><td colspan="11" class="text-center py-5 text-muted">
+      <tr><td colspan="${COL_SPAN}" class="text-center py-5 text-muted">
         <i class="bi bi-inbox fs-3 d-block mb-2"></i>No contacts found.
         <a href="/upload" class="btn btn-sm btn-primary mt-2">Upload Resumes</a>
       </td></tr>`;
@@ -140,7 +141,8 @@ function renderTable(contacts) {
       : '<span class="text-muted">—</span>';
 
     const linkedinBtn = c.linkedin
-      ? `<a href="${esc(c.linkedin)}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" title="${esc(c.linkedin)}">
+      ? `<a href="${esc(c.linkedin)}" target="_blank"
+            class="btn btn-sm btn-outline-primary py-0 px-2" title="${esc(c.linkedin)}">
            <i class="bi bi-linkedin"></i></a>`
       : '';
 
@@ -154,6 +156,13 @@ function renderTable(contacts) {
       ? `<a href="mailto:${esc(c.email)}" class="text-decoration-none">${esc(c.email)}</a>`
       : '—';
 
+    // Superadmin-only "Uploaded By" column
+    const uploadedByCell = window.IS_SUPERADMIN
+      ? `<td class="small">${c.uploaded_by_username
+          ? esc(c.uploaded_by_username) + roleBadge(c.uploaded_by_role)
+          : '—'}</td>`
+      : '';
+
     return `<tr>
       <td class="ps-3 text-muted small">${i + 1}</td>
       <td class="fw-semibold">${esc(c.name) || '—'}</td>
@@ -163,13 +172,9 @@ function renderTable(contacts) {
       <td>${esc(c.job_title) || '—'}</td>
       <td>${esc(c.company) || '—'}</td>
       <td class="wrap">${skillHtml}</td>
-      <td>
-        <div class="d-flex gap-1">
-          ${linkedinBtn}
-          ${pdfBtn}
-        </div>
-      </td>
+      <td><div class="d-flex gap-1">${linkedinBtn}${pdfBtn}</div></td>
       <td class="text-muted small" title="${esc(c.original_filename)}">${trunc(c.original_filename, 22)}</td>
+      ${uploadedByCell}
       <td>
         <button class="btn btn-sm btn-outline-danger py-0 px-2"
                 onclick="deleteResume(${c.resume_id}, this)" title="Delete">
@@ -202,17 +207,11 @@ document.getElementById('export-btn').addEventListener('click', async () => {
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Exporting…';
   try {
     const res = await fetch('/api/export');
-    if (!res.ok) {
-      const err = await res.json();
-      alert(err.error || 'Export failed');
-      return;
-    }
+    if (!res.ok) { alert((await res.json()).error || 'Export failed'); return; }
     const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'resume_contacts.xlsx';
-    a.click();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'resume_contacts.xlsx'; a.click();
     URL.revokeObjectURL(url);
   } catch (e) {
     alert('Export error: ' + e.message);
@@ -230,15 +229,15 @@ document.getElementById('search-input').addEventListener('input', () => {
   searchDebounce = setTimeout(fetchContacts, 300);
 });
 
-['filter-location', 'filter-job-title', 'filter-skill'].forEach(id => {
-  document.getElementById(id).addEventListener('change', fetchContacts);
-});
+['filter-location', 'filter-job-title', 'filter-skill'].forEach(id =>
+  document.getElementById(id).addEventListener('change', fetchContacts)
+);
 
 document.getElementById('clear-filters-btn').addEventListener('click', () => {
-  document.getElementById('search-input').value = '';
-  document.getElementById('filter-location').value = '';
+  document.getElementById('search-input').value    = '';
+  document.getElementById('filter-location').value  = '';
   document.getElementById('filter-job-title').value = '';
-  document.getElementById('filter-skill').value = '';
+  document.getElementById('filter-skill').value     = '';
   fetchContacts();
 });
 
