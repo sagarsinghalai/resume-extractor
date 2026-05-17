@@ -52,11 +52,11 @@
 </div>
 
 <!-- Toolbar -->
-<div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
-  <div class="input-group flex-grow-1" style="max-width:400px">
+<div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
+  <div class="input-group flex-grow-1" style="max-width:380px">
     <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
     <input type="text" id="search-input" class="form-control border-start-0"
-           placeholder="Search name, email, company, skills...">
+           placeholder="Search name, email, company...">
   </div>
   <div class="ms-auto d-flex gap-2">
     <span id="live-dot" class="badge bg-success d-flex align-items-center gap-1">
@@ -69,6 +69,23 @@
       <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
     </button>
   </div>
+</div>
+
+<!-- Filter Row -->
+<div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+  <i class="bi bi-funnel text-muted"></i>
+  <select id="filter-location" class="form-select form-select-sm w-auto">
+    <option value="">All Locations</option>
+  </select>
+  <select id="filter-job-title" class="form-select form-select-sm w-auto">
+    <option value="">All Job Titles</option>
+  </select>
+  <select id="filter-skill" class="form-select form-select-sm w-auto">
+    <option value="">All Skills</option>
+  </select>
+  <button id="clear-filters-btn" class="btn btn-sm btn-outline-secondary d-none">
+    <i class="bi bi-x-circle me-1"></i>Clear Filters
+  </button>
 </div>
 
 <!-- Contacts Table -->

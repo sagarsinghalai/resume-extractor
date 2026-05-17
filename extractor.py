@@ -16,7 +16,7 @@ Required JSON structure:
   "name": "Full name of the person",
   "email": "email address or null",
   "phone": "phone number including country code if present, or null",
-  "linkedin": "full LinkedIn URL or LinkedIn username, or null",
+  "linkedin": "LinkedIn URL or username — see rules below",
   "location": "city, state/country as listed, or null",
   "job_title": "current or most recent job title, or null",
   "company": "current or most recent company name, or null",
@@ -34,6 +34,14 @@ Rules:
 - other_details must always be present as a JSON object.
 - Do not hallucinate information not present in the resume.
 - For phone, preserve formatting exactly as it appears.
+- For linkedin: search carefully for any of these patterns in the resume:
+    * Full URL: "https://linkedin.com/in/username" or "linkedin.com/in/username"
+    * Shorthand: "linkedin.com/in/username" or "in/username"
+    * Label: text after "LinkedIn:" or "LinkedIn Profile:" or "LinkedIn -"
+    * Username only: text that looks like a LinkedIn handle near the word LinkedIn
+  If found, return the full URL like "https://linkedin.com/in/username".
+  If only a username or partial path is found (e.g. "john-doe-123"), return just the username part without the base URL so it can be processed later.
+  Return null ONLY if no LinkedIn information whatsoever is present.
 
 Resume text:
 ---
@@ -41,6 +49,32 @@ Resume text:
 ---
 
 JSON output:"""
+
+
+def normalize_linkedin(raw: str) -> str:
+    """Ensures LinkedIn value is a proper full URL."""
+    if not raw:
+        return raw
+    raw = raw.strip().rstrip('/')
+
+    # Already a full URL
+    if raw.startswith("http://") or raw.startswith("https://"):
+        return raw
+
+    # Has domain but no scheme
+    if "linkedin.com" in raw:
+        return "https://" + raw
+
+    # Looks like a path fragment e.g. "in/username"
+    if raw.startswith("in/"):
+        return "https://linkedin.com/" + raw
+
+    # Bare username — wrap it
+    # Only treat as username if it has no spaces and looks valid
+    if " " not in raw and len(raw) < 100:
+        return "https://linkedin.com/in/" + raw
+
+    return raw
 
 
 def extract_text_from_pdf_bytes(pdf_bytes: bytes) -> tuple:
@@ -81,11 +115,15 @@ def extract_contact_with_claude(raw_text: str, api_key: str) -> tuple:
         if not isinstance(data.get("skills"), list):
             data["skills"] = []
 
+        # Normalize LinkedIn to full URL
+        linkedin_raw = data.get("linkedin")
+        linkedin = normalize_linkedin(linkedin_raw) if linkedin_raw else None
+
         contact = {
             "name":          data.get("name"),
             "email":         data.get("email"),
             "phone":         data.get("phone"),
-            "linkedin":      data.get("linkedin"),
+            "linkedin":      linkedin,
             "location":      data.get("location"),
             "job_title":     data.get("job_title"),
             "company":       data.get("company"),

@@ -1,4 +1,4 @@
-/* dashboard.js — contacts table, live stats polling, search, export */
+/* dashboard.js — contacts table, live stats polling, search, filters, export */
 
 const POLL_MS = 2500;
 let pollTimer = null;
@@ -41,12 +41,10 @@ async function fetchStats() {
     dot.classList.toggle('bg-secondary');
 
     if ((d.pending ?? 0) + (d.processing ?? 0) > 0) {
-      fetchContacts(); // refresh table while queue is active
+      fetchContacts();
+      fetchFilterOptions(); // refresh dropdowns as new resumes finish
     }
-
-    if ((d.failed ?? 0) > 0) {
-      fetchFailed();
-    }
+    if ((d.failed ?? 0) > 0) fetchFailed();
   } catch (e) {
     console.warn('Stats error', e);
   }
@@ -59,7 +57,6 @@ async function fetchFailed() {
     const res = await fetch('/api/resumes/failed');
     const data = await res.json();
     if (!data.length) return;
-
     document.getElementById('failed-section').classList.remove('d-none');
     const tbody = document.getElementById('failed-tbody');
     tbody.innerHTML = data.map(r => `
@@ -71,16 +68,47 @@ async function fetchFailed() {
   } catch (e) { /* ignore */ }
 }
 
+// ── Filter Options ─────────────────────────────────────────────────────────
+
+async function fetchFilterOptions() {
+  try {
+    const res = await fetch('/api/filter-options');
+    const { locations, job_titles, skills } = await res.json();
+
+    populateSelect('filter-location',  locations,  'All Locations');
+    populateSelect('filter-job-title', job_titles, 'All Job Titles');
+    populateSelect('filter-skill',     skills,     'All Skills');
+  } catch (e) {
+    console.warn('Filter options error', e);
+  }
+}
+
+function populateSelect(id, values, placeholder) {
+  const sel = document.getElementById(id);
+  const current = sel.value; // preserve current selection
+  sel.innerHTML = `<option value="">${placeholder}</option>`
+    + values.map(v => `<option value="${esc(v)}" ${v === current ? 'selected' : ''}>${esc(v)}</option>`).join('');
+}
+
 // ── Contacts Table ─────────────────────────────────────────────────────────
 
 async function fetchContacts() {
-  const search = document.getElementById('search-input').value.trim();
-  const url = search
-    ? `/api/contacts?search=${encodeURIComponent(search)}`
-    : '/api/contacts';
+  const search   = document.getElementById('search-input').value.trim();
+  const location = document.getElementById('filter-location').value;
+  const jobTitle = document.getElementById('filter-job-title').value;
+  const skill    = document.getElementById('filter-skill').value;
+
+  const params = new URLSearchParams();
+  if (search)   params.set('search',    search);
+  if (location) params.set('location',  location);
+  if (jobTitle) params.set('job_title', jobTitle);
+  if (skill)    params.set('skill',     skill);
+
+  const hasFilters = search || location || jobTitle || skill;
+  document.getElementById('clear-filters-btn').classList.toggle('d-none', !hasFilters);
 
   try {
-    const res = await fetch(url);
+    const res = await fetch('/api/contacts?' + params.toString());
     const contacts = await res.json();
     renderTable(contacts);
   } catch (e) {
@@ -89,7 +117,7 @@ async function fetchContacts() {
 }
 
 function renderTable(contacts) {
-  const tbody = document.getElementById('contacts-tbody');
+  const tbody  = document.getElementById('contacts-tbody');
   const footer = document.getElementById('table-footer');
 
   if (!contacts.length) {
@@ -112,7 +140,7 @@ function renderTable(contacts) {
       : '<span class="text-muted">—</span>';
 
     const linkedinBtn = c.linkedin
-      ? `<a href="${esc(c.linkedin)}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" title="LinkedIn">
+      ? `<a href="${esc(c.linkedin)}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" title="${esc(c.linkedin)}">
            <i class="bi bi-linkedin"></i></a>`
       : '';
 
@@ -159,7 +187,7 @@ async function deleteResume(resumeId, btn) {
   try {
     btn.disabled = true;
     await fetch(`/api/resumes/${resumeId}`, { method: 'DELETE' });
-    await Promise.all([fetchContacts(), fetchStats()]);
+    await Promise.all([fetchContacts(), fetchStats(), fetchFilterOptions()]);
   } catch (e) {
     alert('Delete failed: ' + e.message);
     btn.disabled = false;
@@ -194,7 +222,7 @@ document.getElementById('export-btn').addEventListener('click', async () => {
   }
 });
 
-// ── Search ─────────────────────────────────────────────────────────────────
+// ── Search & Filters ───────────────────────────────────────────────────────
 
 let searchDebounce;
 document.getElementById('search-input').addEventListener('input', () => {
@@ -202,8 +230,21 @@ document.getElementById('search-input').addEventListener('input', () => {
   searchDebounce = setTimeout(fetchContacts, 300);
 });
 
+['filter-location', 'filter-job-title', 'filter-skill'].forEach(id => {
+  document.getElementById(id).addEventListener('change', fetchContacts);
+});
+
+document.getElementById('clear-filters-btn').addEventListener('click', () => {
+  document.getElementById('search-input').value = '';
+  document.getElementById('filter-location').value = '';
+  document.getElementById('filter-job-title').value = '';
+  document.getElementById('filter-skill').value = '';
+  fetchContacts();
+});
+
 // ── Init ───────────────────────────────────────────────────────────────────
 
 fetchContacts();
 fetchStats();
+fetchFilterOptions();
 pollTimer = setInterval(fetchStats, POLL_MS);

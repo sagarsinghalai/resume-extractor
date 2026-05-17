@@ -73,7 +73,10 @@ def api_upload():
 @app.route("/api/contacts", methods=["GET"])
 def api_contacts():
     contacts = database.get_all_contacts()
-    search = request.args.get("search", "").lower().strip()
+    search    = request.args.get("search", "").lower().strip()
+    location  = request.args.get("location", "").strip()
+    job_title = request.args.get("job_title", "").strip()
+    skill     = request.args.get("skill", "").lower().strip()
 
     if search:
         def matches(c):
@@ -82,7 +85,32 @@ def api_contacts():
                    search in " ".join(c.get("skills") or []).lower()
         contacts = [c for c in contacts if matches(c)]
 
+    if location:
+        contacts = [c for c in contacts if (c.get("location") or "").strip() == location]
+
+    if job_title:
+        contacts = [c for c in contacts if (c.get("job_title") or "").strip() == job_title]
+
+    if skill:
+        contacts = [c for c in contacts
+                    if any(skill == s.lower() for s in (c.get("skills") or []))]
+
     return jsonify(contacts)
+
+
+@app.route("/api/filter-options", methods=["GET"])
+def api_filter_options():
+    """Returns unique locations, job titles and skills for populating filter dropdowns."""
+    contacts = database.get_all_contacts()
+    locations  = sorted({(c.get("location") or "").strip() for c in contacts if c.get("location")})
+    job_titles = sorted({(c.get("job_title") or "").strip() for c in contacts if c.get("job_title")})
+    skills_set = set()
+    for c in contacts:
+        for s in (c.get("skills") or []):
+            if s:
+                skills_set.add(s.strip())
+    skills = sorted(skills_set)
+    return jsonify({"locations": locations, "job_titles": job_titles, "skills": skills})
 
 
 @app.route("/api/status", methods=["GET"])
@@ -137,6 +165,7 @@ def api_export():
         df.to_excel(writer, sheet_name="Contacts", index=False)
         ws = writer.sheets["Contacts"]
 
+        # Style header row
         header_fill = PatternFill("solid", fgColor="1F4E79")
         header_font = Font(bold=True, color="FFFFFF")
         for cell in ws[1]:
@@ -144,6 +173,24 @@ def api_export():
             cell.font = header_font
             cell.alignment = Alignment(horizontal="center")
 
+        # Make LinkedIn cells clickable hyperlinks
+        from openpyxl.styles import colors
+        linkedin_col = None
+        for cell in ws[1]:
+            if cell.value == "LinkedIn":
+                linkedin_col = cell.column_letter
+                break
+        if linkedin_col:
+            for row in ws.iter_rows(min_row=2, min_col=ws[f"{linkedin_col}1"].column,
+                                     max_col=ws[f"{linkedin_col}1"].column):
+                cell = row[0]
+                url = cell.value
+                if url and url.startswith("http"):
+                    cell.hyperlink = url
+                    cell.value = url
+                    cell.font = Font(color="0563C1", underline="single")
+
+        # Auto-fit column widths
         for col_cells in ws.columns:
             max_len = max((len(str(cell.value or "")) for cell in col_cells), default=10)
             ws.column_dimensions[col_cells[0].column_letter].width = min(max_len + 4, 60)
