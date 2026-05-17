@@ -22,6 +22,9 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 executor = ThreadPoolExecutor(max_workers=3)
 
+# Initialize database at startup (runs with both gunicorn and direct python)
+database.init_db()
+
 
 def allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() == "pdf"
