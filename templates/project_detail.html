@@ -56,6 +56,9 @@
   {% if session.role == 'superadmin' %}
   <select id="filter-uploader-role" class="form-select form-select-sm w-auto">
     <option value="">All Roles</option>
+    <option value="reseller">Resellers</option>
+    <option value="customer">Customers</option>
+    <option value="superadmin">Admin</option>
   </select>
   {% endif %}
   <button id="clear-filters-btn" class="btn btn-sm btn-outline-secondary d-none">

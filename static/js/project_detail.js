@@ -39,18 +39,7 @@ async function fetchFilterOptions() {
     populateSelect('filter-job-title', job_titles, 'All Job Titles');
     populateSelect('filter-skill',     skills,     'All Skills');
 
-    // Uploader roles (superadmin only — element may not exist)
-    if (uploader_roles && uploader_roles.length) {
-      const labelMap = { reseller: 'Resellers', customer: 'Customers', superadmin: 'Superadmin' };
-      const sel = document.getElementById('filter-uploader-role');
-      if (sel) {
-        const cur = sel.value;
-        sel.innerHTML = `<option value="">All Roles</option>`
-          + uploader_roles.map(r =>
-              `<option value="${esc(r)}"${r === cur ? ' selected' : ''}>${labelMap[r] || esc(r)}</option>`
-            ).join('');
-      }
-    }
+    // Role dropdown is static HTML — no JS re-render needed
   } catch (e) { console.warn('Filter options error', e); }
 }
 

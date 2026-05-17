@@ -87,10 +87,7 @@ async function fetchFilterOptions() {
     // Projects — value is numeric id, label is project name
     populateProjectSelect('filter-project', projects);
 
-    // Uploader roles (superadmin only — element may not exist)
-    if (uploader_roles && uploader_roles.length) {
-      populateRoleSelect('filter-uploader-role', uploader_roles);
-    }
+    // Role dropdown is static HTML — no JS re-render needed
   } catch (e) { console.warn('Filter options error', e); }
 }
 
@@ -109,19 +106,6 @@ function populateProjectSelect(id, projects) {
   sel.innerHTML = `<option value="">All Projects</option>`
     + projects.map(p =>
         `<option value="${p.id}"${String(p.id) === current ? ' selected' : ''}>${esc(p.name)}</option>`
-      ).join('');
-}
-
-function populateRoleSelect(id, roles) {
-  const sel = document.getElementById(id);
-  if (!sel) return;
-  const current = sel.value;
-  // Only add options that are present in actual data; keep the hardcoded ones in HTML
-  // Re-render with what the server says is present
-  const labelMap = { reseller: 'Resellers', customer: 'Customers', superadmin: 'Superadmin' };
-  sel.innerHTML = `<option value="">All Roles</option>`
-    + roles.map(r =>
-        `<option value="${esc(r)}"${r === current ? ' selected' : ''}>${labelMap[r] || esc(r)}</option>`
       ).join('');
 }
 
