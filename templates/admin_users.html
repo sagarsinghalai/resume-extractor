@@ -18,32 +18,49 @@
   </div>
   <div class="card-body p-4">
     <form method="POST" action="/admin/users/create" class="row g-3 align-items-end">
-      <div class="col-12 col-md-3">
+      <div class="col-12 col-md-2">
         <label class="form-label small fw-semibold">Username <span class="text-danger">*</span></label>
         <input type="text" name="username" class="form-control" required placeholder="e.g. john_doe">
       </div>
-      <div class="col-12 col-md-3">
+      <div class="col-12 col-md-2">
         <label class="form-label small fw-semibold">Email</label>
         <input type="email" name="email" class="form-control" placeholder="optional">
       </div>
       <div class="col-12 col-md-2">
         <label class="form-label small fw-semibold">Role <span class="text-danger">*</span></label>
-        <select name="role" class="form-select">
+        <select name="role" id="create-role-select" class="form-select">
           <option value="customer">Customer</option>
           <option value="reseller">Reseller</option>
           <option value="superadmin">Superadmin</option>
         </select>
       </div>
-      <div class="col-12 col-md-3">
+      <div class="col-12 col-md-2" id="reseller-assign-col">
+        <label class="form-label small fw-semibold">Assign to Reseller</label>
+        <select name="reseller_id" class="form-select">
+          <option value="">— None —</option>
+          {% for r in resellers %}
+            <option value="{{ r.id }}">{{ r.username }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-2">
         <label class="form-label small fw-semibold">Password <span class="text-danger">*</span></label>
         <input type="password" name="password" class="form-control" required placeholder="Set a password">
       </div>
-      <div class="col-12 col-md-1">
-        <button type="submit" class="btn btn-primary w-100" title="Create user">
-          <i class="bi bi-plus-lg"></i>
+      <div class="col-12 col-md-2">
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="bi bi-plus-lg me-1"></i>Create
         </button>
       </div>
     </form>
+    <script>
+      // Hide "Assign to Reseller" when role is not customer
+      document.getElementById('create-role-select').addEventListener('change', function () {
+        document.getElementById('reseller-assign-col').style.display =
+          this.value === 'customer' ? '' : 'none';
+      });
+      document.getElementById('create-role-select').dispatchEvent(new Event('change'));
+    </script>
   </div>
 </div>
 
@@ -58,6 +75,7 @@
             <th>Username</th>
             <th>Email</th>
             <th>Role</th>
+            <th>Reseller</th>
             <th>Created</th>
             <th>Reset Password</th>
             <th></th>
@@ -81,6 +99,27 @@
                 <span class="badge bg-warning text-dark">Reseller</span>
               {% else %}
                 <span class="badge bg-info text-dark">Customer</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if u.role == 'customer' %}
+                <form method="POST" action="/admin/users/{{ u.id }}/assign-reseller"
+                      class="d-flex gap-1 align-items-center">
+                  <select name="reseller_id" class="form-select form-select-sm" style="max-width:130px">
+                    <option value="">— None —</option>
+                    {% for r in resellers %}
+                      <option value="{{ r.id }}"
+                        {% if u.reseller_id == r.id %}selected{% endif %}>
+                        {{ r.username }}
+                      </option>
+                    {% endfor %}
+                  </select>
+                  <button type="submit" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Save">
+                    <i class="bi bi-check-lg"></i>
+                  </button>
+                </form>
+              {% else %}
+                <span class="text-muted small">—</span>
               {% endif %}
             </td>
             <td class="text-muted small">{{ (u.created_at or '—')[:16] }}</td>
@@ -107,7 +146,7 @@
           </tr>
           {% else %}
           <tr>
-            <td colspan="7" class="text-center py-4 text-muted">No users found.</td>
+            <td colspan="8" class="text-center py-4 text-muted">No users found.</td>
           </tr>
           {% endfor %}
         </tbody>

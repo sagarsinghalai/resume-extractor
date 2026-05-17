@@ -11,6 +11,7 @@ if DATABASE_URL:
         password_hash TEXT NOT NULL,
         role          TEXT NOT NULL DEFAULT 'customer'
                       CHECK (role IN ('superadmin', 'reseller', 'customer')),
+        reseller_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
         created_at    TIMESTAMP DEFAULT NOW()
     );
     """
@@ -61,6 +62,7 @@ else:
         password_hash TEXT NOT NULL,
         role          TEXT NOT NULL DEFAULT 'customer'
                       CHECK (role IN ('superadmin', 'reseller', 'customer')),
+        reseller_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
         created_at    DATETIME DEFAULT (datetime('now', 'localtime'))
     );
     """

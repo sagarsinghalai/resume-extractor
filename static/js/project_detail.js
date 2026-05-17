@@ -1,7 +1,8 @@
 /* project_detail.js — contacts table filtered to a single project */
 
-const COL_SPAN = window.IS_SUPERADMIN ? 12 : 11;
-const PID      = window.PROJECT_ID;
+const SHOW_UPLOADER = window.IS_SUPERADMIN || window.IS_RESELLER;
+const COL_SPAN      = SHOW_UPLOADER ? 12 : 11;
+const PID           = window.PROJECT_ID;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -116,7 +117,7 @@ function renderTable(contacts) {
       ? `<a href="mailto:${esc(c.email)}" class="text-decoration-none">${esc(c.email)}</a>`
       : '—';
 
-    const uploadedByCell = window.IS_SUPERADMIN
+    const uploadedByCell = SHOW_UPLOADER
       ? `<td class="small">${c.uploaded_by_username
           ? esc(c.uploaded_by_username) + roleBadge(c.uploaded_by_role)
           : '—'}</td>`

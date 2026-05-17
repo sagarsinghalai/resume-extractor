@@ -76,14 +76,16 @@ def init_db():
     cur.execute(models.RESUMES_TABLE)
     cur.execute(models.CONTACTS_TABLE)
 
-    # Migration: add user_id to existing resumes tables
+    # Migrations: add columns that may not exist on older databases
     if DATABASE_URL:
         cur.execute("ALTER TABLE resumes ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);")
         cur.execute("ALTER TABLE resumes ADD COLUMN IF NOT EXISTS project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL;")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS reseller_id INTEGER REFERENCES users(id) ON DELETE SET NULL;")
     else:
         for col_sql in [
             "ALTER TABLE resumes ADD COLUMN user_id INTEGER REFERENCES users(id);",
             "ALTER TABLE resumes ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL;",
+            "ALTER TABLE users ADD COLUMN reseller_id INTEGER REFERENCES users(id) ON DELETE SET NULL;",
         ]:
             try:
                 cur.execute(col_sql)
@@ -117,21 +119,21 @@ def _seed_superadmin(conn):
 
 # ── User CRUD ─────────────────────────────────────────────────────────────────
 
-def create_user(username: str, email: str, password: str, role: str):
+def create_user(username: str, email: str, password: str, role: str, reseller_id: int = None):
     from werkzeug.security import generate_password_hash
     conn = get_conn()
     cur = conn.cursor()
     try:
         if DATABASE_URL:
             cur.execute(
-                f"INSERT INTO users (username, email, password_hash, role) VALUES ({P},{P},{P},{P}) RETURNING id",
-                (username, email or None, generate_password_hash(password), role),
+                f"INSERT INTO users (username, email, password_hash, role, reseller_id) VALUES ({P},{P},{P},{P},{P}) RETURNING id",
+                (username, email or None, generate_password_hash(password), role, reseller_id),
             )
             new_id = cur.fetchone()[0]
         else:
             cur.execute(
-                f"INSERT INTO users (username, email, password_hash, role) VALUES ({P},{P},{P},{P})",
-                (username, email or None, generate_password_hash(password), role),
+                f"INSERT INTO users (username, email, password_hash, role, reseller_id) VALUES ({P},{P},{P},{P},{P})",
+                (username, email or None, generate_password_hash(password), role, reseller_id),
             )
             new_id = cur.lastrowid
         conn.commit()
@@ -141,6 +143,31 @@ def create_user(username: str, email: str, password: str, role: str):
         return None
     finally:
         conn.close()
+
+
+def assign_customer_reseller(customer_id: int, reseller_id):
+    """Set (or clear) the reseller that owns a customer account."""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        f"UPDATE users SET reseller_id={P} WHERE id={P}",
+        (reseller_id if reseller_id else None, customer_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_customers_of_reseller(reseller_id: int) -> list:
+    """Return all customer accounts assigned to a reseller."""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        f"SELECT id, username, email FROM users WHERE reseller_id={P} AND role='customer' ORDER BY username ASC",
+        (reseller_id,),
+    )
+    rows = _rows(cur)
+    conn.close()
+    return rows
 
 
 def get_user_by_username(username: str):
@@ -170,7 +197,13 @@ def get_user_by_id(user_id: int):
 def get_all_users() -> list:
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("SELECT id, username, email, role, created_at FROM users ORDER BY created_at ASC")
+    cur.execute(
+        """SELECT u.id, u.username, u.email, u.role, u.reseller_id, u.created_at,
+                  r.username AS reseller_username
+           FROM users u
+           LEFT JOIN users r ON u.reseller_id = r.id
+           ORDER BY u.created_at ASC"""
+    )
     rows = _rows(cur)
     conn.close()
     for r in rows:
@@ -306,14 +339,34 @@ def get_all_contacts(user_id: int = None, role: str = None) -> list:
                       c.location, c.job_title, c.company, c.skills, c.other_details,
                       c.extracted_at,
                       r.original_filename, r.upload_date, r.status, r.project_id,
-                      u.username AS uploaded_by_username,
-                      u.role     AS uploaded_by_role
+                      r.user_id          AS uploaded_by_user_id,
+                      u.username         AS uploaded_by_username,
+                      u.role             AS uploaded_by_role
                FROM contacts c
                JOIN resumes r ON c.resume_id = r.id
                LEFT JOIN users u ON r.user_id = u.id
                ORDER BY c.extracted_at DESC"""
         )
+    elif role == "reseller":
+        # Reseller sees own uploads + all their customers' uploads
+        cur.execute(
+            f"""SELECT c.id, c.resume_id, c.name, c.email, c.phone, c.linkedin,
+                       c.location, c.job_title, c.company, c.skills, c.other_details,
+                       c.extracted_at,
+                       r.original_filename, r.upload_date, r.status, r.project_id,
+                       r.user_id          AS uploaded_by_user_id,
+                       u.username         AS uploaded_by_username,
+                       u.role             AS uploaded_by_role
+                FROM contacts c
+                JOIN resumes r ON c.resume_id = r.id
+                JOIN users u ON r.user_id = u.id
+                WHERE r.user_id = {P}
+                   OR r.user_id IN (SELECT id FROM users WHERE reseller_id = {P})
+                ORDER BY c.extracted_at DESC""",
+            (user_id, user_id),
+        )
     else:
+        # Customer — own data only
         cur.execute(
             f"""SELECT c.id, c.resume_id, c.name, c.email, c.phone, c.linkedin,
                        c.location, c.job_title, c.company, c.skills, c.other_details,
@@ -328,18 +381,7 @@ def get_all_contacts(user_id: int = None, role: str = None) -> list:
 
     rows = _rows(cur)
     conn.close()
-
-    result = []
-    for d in rows:
-        try:
-            d["skills"] = json.loads(d["skills"]) if d["skills"] else []
-        except (json.JSONDecodeError, TypeError):
-            d["skills"] = []
-        for key in ("extracted_at", "upload_date"):
-            if d.get(key) and not isinstance(d[key], str):
-                d[key] = str(d[key])
-        result.append(d)
-    return result
+    return _process_contact_rows(rows)
 
 
 def get_processing_status(user_id: int = None, role: str = None) -> dict:
@@ -355,6 +397,19 @@ def get_processing_status(user_id: int = None, role: str = None) -> dict:
                    COALESCE(SUM(CASE WHEN status='failed'     THEN 1 ELSE 0 END),0) AS failed,
                    COUNT(*) AS total
                FROM resumes"""
+        )
+    elif role == "reseller":
+        cur.execute(
+            f"""SELECT
+                   COALESCE(SUM(CASE WHEN status='pending'    THEN 1 ELSE 0 END),0) AS pending,
+                   COALESCE(SUM(CASE WHEN status='processing' THEN 1 ELSE 0 END),0) AS processing,
+                   COALESCE(SUM(CASE WHEN status='done'       THEN 1 ELSE 0 END),0) AS done,
+                   COALESCE(SUM(CASE WHEN status='failed'     THEN 1 ELSE 0 END),0) AS failed,
+                   COUNT(*) AS total
+               FROM resumes
+               WHERE user_id = {P}
+                  OR user_id IN (SELECT id FROM users WHERE reseller_id = {P})""",
+            (user_id, user_id),
         )
     else:
         cur.execute(
@@ -380,6 +435,14 @@ def get_failed_resumes(user_id: int = None, role: str = None) -> list:
     if role == "superadmin":
         cur.execute(
             "SELECT id, original_filename, upload_date, error_message FROM resumes WHERE status='failed' ORDER BY upload_date DESC"
+        )
+    elif role == "reseller":
+        cur.execute(
+            f"""SELECT id, original_filename, upload_date, error_message FROM resumes
+                WHERE status='failed'
+                  AND (user_id={P} OR user_id IN (SELECT id FROM users WHERE reseller_id={P}))
+                ORDER BY upload_date DESC""",
+            (user_id, user_id),
         )
     else:
         cur.execute(
@@ -415,12 +478,18 @@ def get_filter_options(user_id: int = None, role: str = None) -> dict:
         uploader_roles = sorted({c.get("uploaded_by_role") for c in contacts
                                   if c.get("uploaded_by_role")})
 
+    # Customers list (reseller only)
+    customers = []
+    if role == "reseller":
+        customers = get_customers_of_reseller(user_id)
+
     return {
         "locations":      locations,
         "job_titles":     job_titles,
         "skills":         sorted(skills_set),
         "projects":       projects,
         "uploader_roles": uploader_roles,
+        "customers":      customers,
     }
 
 
@@ -473,6 +542,24 @@ def get_all_projects(user_id: int = None, role: str = None) -> list:
                GROUP BY p.id, p.name, p.description, p.created_at, u.username, u.role
                ORDER BY p.created_at DESC"""
         )
+    elif role == "reseller":
+        # Own projects + customers' projects
+        cur.execute(
+            f"""SELECT p.id, p.name, p.description, p.created_at,
+                       u.username AS owner_username,
+                       u.role     AS owner_role,
+                       COUNT(DISTINCT r.id)  AS resume_count,
+                       COUNT(DISTINCT c.id)  AS contact_count
+                FROM projects p
+                JOIN  users u    ON p.user_id    = u.id
+                LEFT JOIN resumes r  ON r.project_id = p.id
+                LEFT JOIN contacts c ON c.resume_id  = r.id
+                WHERE p.user_id = {P}
+                   OR p.user_id IN (SELECT id FROM users WHERE reseller_id = {P})
+                GROUP BY p.id, p.name, p.description, p.created_at, u.username, u.role
+                ORDER BY p.created_at DESC""",
+            (user_id, user_id),
+        )
     else:
         cur.execute(
             f"""SELECT p.id, p.name, p.description, p.created_at,
@@ -506,6 +593,16 @@ def get_project_by_id(project_id: int, user_id: int = None, role: str = None):
                 LEFT JOIN users u ON p.user_id = u.id
                 WHERE p.id = {P}""",
             (project_id,),
+        )
+    elif role == "reseller":
+        cur.execute(
+            f"""SELECT p.id, p.name, p.description, p.created_at, p.user_id,
+                       u.username AS owner_username, u.role AS owner_role
+                FROM projects p
+                LEFT JOIN users u ON p.user_id = u.id
+                WHERE p.id = {P}
+                  AND (p.user_id = {P} OR p.user_id IN (SELECT id FROM users WHERE reseller_id = {P}))""",
+            (project_id, user_id, user_id),
         )
     else:
         cur.execute(
@@ -604,14 +701,32 @@ def get_project_contacts(project_id: int, user_id: int = None, role: str = None)
                        c.location, c.job_title, c.company, c.skills, c.other_details,
                        c.extracted_at,
                        r.original_filename, r.upload_date, r.status, r.project_id,
-                       u.username AS uploaded_by_username,
-                       u.role     AS uploaded_by_role
+                       r.user_id          AS uploaded_by_user_id,
+                       u.username         AS uploaded_by_username,
+                       u.role             AS uploaded_by_role
                 FROM contacts c
                 JOIN resumes r ON c.resume_id = r.id
                 LEFT JOIN users u ON r.user_id = u.id
                 WHERE r.project_id = {P}
                 ORDER BY c.extracted_at DESC""",
             (project_id,),
+        )
+    elif role == "reseller":
+        cur.execute(
+            f"""SELECT c.id, c.resume_id, c.name, c.email, c.phone, c.linkedin,
+                       c.location, c.job_title, c.company, c.skills, c.other_details,
+                       c.extracted_at,
+                       r.original_filename, r.upload_date, r.status, r.project_id,
+                       r.user_id          AS uploaded_by_user_id,
+                       u.username         AS uploaded_by_username,
+                       u.role             AS uploaded_by_role
+                FROM contacts c
+                JOIN resumes r ON c.resume_id = r.id
+                JOIN users u ON r.user_id = u.id
+                WHERE r.project_id = {P}
+                  AND (r.user_id = {P} OR r.user_id IN (SELECT id FROM users WHERE reseller_id = {P}))
+                ORDER BY c.extracted_at DESC""",
+            (project_id, user_id, user_id),
         )
     else:
         cur.execute(

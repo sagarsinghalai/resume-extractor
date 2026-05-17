@@ -134,7 +134,8 @@ def api_admin_projects():
 @superadmin_required
 def admin_users():
     users = database.get_all_users()
-    return render_template("admin_users.html", users=users)
+    resellers = [u for u in users if u["role"] == "reseller"]
+    return render_template("admin_users.html", users=users, resellers=resellers)
 
 
 @app.route("/admin/users/create", methods=["POST"])
@@ -152,7 +153,13 @@ def admin_create_user():
         flash("Username and password are required.", "danger")
         return redirect(url_for("admin_users"))
 
-    result = database.create_user(username, email, password, role)
+    reseller_id_raw = request.form.get("reseller_id", "").strip()
+    reseller_id_val = int(reseller_id_raw) if reseller_id_raw else None
+    # Only attach a reseller if creating a customer account
+    if role != "customer":
+        reseller_id_val = None
+
+    result = database.create_user(username, email, password, role, reseller_id_val)
     if result is None:
         flash(f"Username '{username}' already exists.", "danger")
     else:
@@ -168,6 +175,16 @@ def admin_delete_user(user_id):
         return redirect(url_for("admin_users"))
     database.delete_user(user_id)
     flash("User deleted.", "success")
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/users/<int:user_id>/assign-reseller", methods=["POST"])
+@superadmin_required
+def admin_assign_reseller(user_id):
+    reseller_id_raw = request.form.get("reseller_id", "").strip()
+    reseller_id_val = int(reseller_id_raw) if reseller_id_raw else None
+    database.assign_customer_reseller(user_id, reseller_id_val)
+    flash("Reseller assignment updated.", "success")
     return redirect(url_for("admin_users"))
 
 
@@ -255,6 +272,13 @@ def api_contacts():
     if uploader_role and role == "superadmin":
         contacts = [c for c in contacts
                     if (c.get("uploaded_by_role") or "") == uploader_role]
+    customer_id_s = request.args.get("customer_id", "").strip()
+    if customer_id_s and role == "reseller":
+        try:
+            cid = int(customer_id_s)
+            contacts = [c for c in contacts if c.get("uploaded_by_user_id") == cid]
+        except ValueError:
+            pass
 
     return jsonify(contacts)
 
@@ -429,6 +453,13 @@ def api_project_contacts(project_id):
     if uploader_role and role == "superadmin":
         contacts = [c for c in contacts
                     if (c.get("uploaded_by_role") or "") == uploader_role]
+    customer_id_s = request.args.get("customer_id", "").strip()
+    if customer_id_s and role == "reseller":
+        try:
+            cid = int(customer_id_s)
+            contacts = [c for c in contacts if c.get("uploaded_by_user_id") == cid]
+        except ValueError:
+            pass
 
     return jsonify(contacts)
 

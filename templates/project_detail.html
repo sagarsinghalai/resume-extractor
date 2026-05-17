@@ -83,14 +83,14 @@
             <th>Skills</th>
             <th>Links</th>
             <th>Source</th>
-            {% if session.role == 'superadmin' %}
+            {% if session.role in ('superadmin', 'reseller') %}
               <th>Uploaded By</th>
             {% endif %}
             <th></th>
           </tr>
         </thead>
         <tbody id="contacts-tbody">
-          <tr><td colspan="{{ 12 if session.role == 'superadmin' else 11 }}"
+          <tr><td colspan="{{ 12 if session.role in ('superadmin', 'reseller') else 11 }}"
                   class="text-center text-muted py-5">
             <div class="spinner-border spinner-border-sm me-2"></div>Loading contacts...
           </td></tr>
@@ -106,6 +106,7 @@
 {% block scripts %}
 <script>
   window.IS_SUPERADMIN  = {{ 'true' if session.role == 'superadmin' else 'false' }};
+  window.IS_RESELLER    = {{ 'true' if session.role == 'reseller'   else 'false' }};
   window.PROJECT_ID     = {{ project.id }};
   window.PROJECT_NAME   = {{ project.name | tojson }};
 </script>

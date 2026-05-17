@@ -2,7 +2,8 @@
 
 const POLL_MS = 2500;
 let pollTimer = null;
-const COL_SPAN = window.IS_SUPERADMIN ? 12 : 11;
+const SHOW_UPLOADER = window.IS_SUPERADMIN || window.IS_RESELLER;
+const COL_SPAN = SHOW_UPLOADER ? 12 : 11;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -87,6 +88,11 @@ async function fetchFilterOptions() {
     // Projects — value is numeric id, label is project name
     populateProjectSelect('filter-project', projects);
 
+    // Customers dropdown (reseller only)
+    if (customers && customers.length) {
+      populateCustomerSelect('filter-customer', customers);
+    }
+
     // Role dropdown is static HTML — no JS re-render needed
   } catch (e) { console.warn('Filter options error', e); }
 }
@@ -109,6 +115,16 @@ function populateProjectSelect(id, projects) {
       ).join('');
 }
 
+function populateCustomerSelect(id, customers) {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = `<option value="">All Customers</option>`
+    + customers.map(c =>
+        `<option value="${c.id}"${String(c.id) === current ? ' selected' : ''}>${esc(c.username)}</option>`
+      ).join('');
+}
+
 // ── Contacts Table ─────────────────────────────────────────────────────────
 
 async function fetchContacts() {
@@ -118,6 +134,7 @@ async function fetchContacts() {
   const skill         = document.getElementById('filter-skill').value;
   const project       = document.getElementById('filter-project').value;
   const uploaderRole  = document.getElementById('filter-uploader-role')?.value || '';
+  const customerId    = document.getElementById('filter-customer')?.value || '';
 
   const params = new URLSearchParams();
   if (search)       params.set('search',        search);
@@ -126,8 +143,9 @@ async function fetchContacts() {
   if (skill)        params.set('skill',          skill);
   if (project)      params.set('project_id',     project);
   if (uploaderRole) params.set('uploader_role',  uploaderRole);
+  if (customerId)   params.set('customer_id',    customerId);
 
-  const anyActive = !!(search || location || jobTitle || skill || project || uploaderRole);
+  const anyActive = !!(search || location || jobTitle || skill || project || uploaderRole || customerId);
   document.getElementById('clear-filters-btn').classList.toggle('d-none', !anyActive);
 
   try {
@@ -176,8 +194,8 @@ function renderTable(contacts) {
       ? `<a href="mailto:${esc(c.email)}" class="text-decoration-none">${esc(c.email)}</a>`
       : '—';
 
-    // Superadmin-only "Uploaded By" column
-    const uploadedByCell = window.IS_SUPERADMIN
+    // "Uploaded By" column — shown to superadmin and reseller
+    const uploadedByCell = SHOW_UPLOADER
       ? `<td class="small">${c.uploaded_by_username
           ? esc(c.uploaded_by_username) + roleBadge(c.uploaded_by_role)
           : '—'}</td>`
@@ -250,7 +268,7 @@ document.getElementById('search-input').addEventListener('input', () => {
 });
 
 ['filter-location', 'filter-job-title', 'filter-skill',
- 'filter-project', 'filter-uploader-role'].forEach(id => {
+ 'filter-project', 'filter-uploader-role', 'filter-customer'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('change', fetchContacts);
 });
@@ -261,8 +279,10 @@ document.getElementById('clear-filters-btn').addEventListener('click', () => {
   document.getElementById('filter-job-title').value     = '';
   document.getElementById('filter-skill').value         = '';
   document.getElementById('filter-project').value       = '';
-  const roleEl = document.getElementById('filter-uploader-role');
-  if (roleEl) roleEl.value = '';
+  const roleEl     = document.getElementById('filter-uploader-role');
+  const customerEl = document.getElementById('filter-customer');
+  if (roleEl)     roleEl.value     = '';
+  if (customerEl) customerEl.value = '';
   fetchContacts();
 });
 
