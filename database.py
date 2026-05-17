@@ -17,7 +17,9 @@ if DATABASE_URL:
         return psycopg2.Binary(b)
 
     def get_conn():
-        url = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+        url = DATABASE_URL
+        if url.startswith("postgres://"):
+            url = "postgresql://" + url[len("postgres://"):]
         if "sslmode" not in url:
             url += ("&" if "?" in url else "?") + "sslmode=require"
         conn = psycopg2.connect(url)
