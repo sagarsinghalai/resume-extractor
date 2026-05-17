@@ -223,11 +223,13 @@ def api_upload():
 @login_required
 def api_contacts():
     user_id, role = current_user()
-    contacts  = database.get_all_contacts(user_id, role)
-    search    = request.args.get("search", "").lower().strip()
-    location  = request.args.get("location", "").strip()
-    job_title = request.args.get("job_title", "").strip()
-    skill     = request.args.get("skill", "").lower().strip()
+    contacts      = database.get_all_contacts(user_id, role)
+    search        = request.args.get("search",        "").lower().strip()
+    location      = request.args.get("location",      "").strip()
+    job_title     = request.args.get("job_title",     "").strip()
+    skill         = request.args.get("skill",         "").lower().strip()
+    project_id_s  = request.args.get("project_id",   "").strip()
+    uploader_role = request.args.get("uploader_role", "").strip()
 
     if search:
         def matches(c):
@@ -244,6 +246,15 @@ def api_contacts():
     if skill:
         contacts = [c for c in contacts
                     if any(skill == s.lower() for s in (c.get("skills") or []))]
+    if project_id_s:
+        try:
+            pid = int(project_id_s)
+            contacts = [c for c in contacts if c.get("project_id") == pid]
+        except ValueError:
+            pass
+    if uploader_role and role == "superadmin":
+        contacts = [c for c in contacts
+                    if (c.get("uploaded_by_role") or "") == uploader_role]
 
     return jsonify(contacts)
 
@@ -394,11 +405,12 @@ def api_project_contacts(project_id):
     if not project:
         return jsonify({"error": "Not found"}), 404
 
-    contacts  = database.get_project_contacts(project_id, user_id, role)
-    search    = request.args.get("search", "").lower().strip()
-    location  = request.args.get("location", "").strip()
-    job_title = request.args.get("job_title", "").strip()
-    skill     = request.args.get("skill", "").lower().strip()
+    contacts      = database.get_project_contacts(project_id, user_id, role)
+    search        = request.args.get("search",        "").lower().strip()
+    location      = request.args.get("location",      "").strip()
+    job_title     = request.args.get("job_title",     "").strip()
+    skill         = request.args.get("skill",         "").lower().strip()
+    uploader_role = request.args.get("uploader_role", "").strip()
 
     if search:
         def matches(c):
@@ -414,6 +426,9 @@ def api_project_contacts(project_id):
     if skill:
         contacts = [c for c in contacts
                     if any(skill == s.lower() for s in (c.get("skills") or []))]
+    if uploader_role and role == "superadmin":
+        contacts = [c for c in contacts
+                    if (c.get("uploaded_by_role") or "") == uploader_role]
 
     return jsonify(contacts)
 
@@ -433,7 +448,16 @@ def api_project_filter_options(project_id):
         for s in (c.get("skills") or []):
             if s:
                 skills_set.add(s.strip())
-    return jsonify({"locations": locations, "job_titles": job_titles, "skills": sorted(skills_set)})
+    uploader_roles = []
+    if role == "superadmin":
+        uploader_roles = sorted({c.get("uploaded_by_role") for c in contacts
+                                   if c.get("uploaded_by_role")})
+    return jsonify({
+        "locations":      locations,
+        "job_titles":     job_titles,
+        "skills":         sorted(skills_set),
+        "uploader_roles": uploader_roles,
+    })
 
 
 @app.route("/api/projects/<int:project_id>/export", methods=["GET"])

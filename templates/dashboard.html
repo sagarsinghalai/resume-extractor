@@ -83,6 +83,17 @@
   <select id="filter-skill" class="form-select form-select-sm w-auto">
     <option value="">All Skills</option>
   </select>
+  <select id="filter-project" class="form-select form-select-sm w-auto">
+    <option value="">All Projects</option>
+  </select>
+  {% if session.role == 'superadmin' %}
+  <select id="filter-uploader-role" class="form-select form-select-sm w-auto">
+    <option value="">All Roles</option>
+    <option value="reseller">Resellers</option>
+    <option value="customer">Customers</option>
+    <option value="superadmin">Superadmin</option>
+  </select>
+  {% endif %}
   <button id="clear-filters-btn" class="btn btn-sm btn-outline-secondary d-none">
     <i class="bi bi-x-circle me-1"></i>Clear Filters
   </button>

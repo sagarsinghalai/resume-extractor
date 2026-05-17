@@ -305,7 +305,7 @@ def get_all_contacts(user_id: int = None, role: str = None) -> list:
             """SELECT c.id, c.resume_id, c.name, c.email, c.phone, c.linkedin,
                       c.location, c.job_title, c.company, c.skills, c.other_details,
                       c.extracted_at,
-                      r.original_filename, r.upload_date, r.status,
+                      r.original_filename, r.upload_date, r.status, r.project_id,
                       u.username AS uploaded_by_username,
                       u.role     AS uploaded_by_role
                FROM contacts c
@@ -318,7 +318,7 @@ def get_all_contacts(user_id: int = None, role: str = None) -> list:
             f"""SELECT c.id, c.resume_id, c.name, c.email, c.phone, c.linkedin,
                        c.location, c.job_title, c.company, c.skills, c.other_details,
                        c.extracted_at,
-                       r.original_filename, r.upload_date, r.status
+                       r.original_filename, r.upload_date, r.status, r.project_id
                 FROM contacts c
                 JOIN resumes r ON c.resume_id = r.id
                 WHERE r.user_id = {P}
@@ -404,7 +404,24 @@ def get_filter_options(user_id: int = None, role: str = None) -> dict:
         for s in (c.get("skills") or []):
             if s:
                 skills_set.add(s.strip())
-    return {"locations": locations, "job_titles": job_titles, "skills": sorted(skills_set)}
+
+    # Projects scoped to this user/role
+    projects_raw = get_all_projects(user_id, role)
+    projects = [{"id": p["id"], "name": p["name"]} for p in projects_raw]
+
+    # Uploader roles (superadmin only)
+    uploader_roles = []
+    if role == "superadmin":
+        uploader_roles = sorted({c.get("uploaded_by_role") for c in contacts
+                                  if c.get("uploaded_by_role")})
+
+    return {
+        "locations":      locations,
+        "job_titles":     job_titles,
+        "skills":         sorted(skills_set),
+        "projects":       projects,
+        "uploader_roles": uploader_roles,
+    }
 
 
 # ── Projects ──────────────────────────────────────────────────────────────────
@@ -586,7 +603,7 @@ def get_project_contacts(project_id: int, user_id: int = None, role: str = None)
             f"""SELECT c.id, c.resume_id, c.name, c.email, c.phone, c.linkedin,
                        c.location, c.job_title, c.company, c.skills, c.other_details,
                        c.extracted_at,
-                       r.original_filename, r.upload_date, r.status,
+                       r.original_filename, r.upload_date, r.status, r.project_id,
                        u.username AS uploaded_by_username,
                        u.role     AS uploaded_by_role
                 FROM contacts c
@@ -601,7 +618,7 @@ def get_project_contacts(project_id: int, user_id: int = None, role: str = None)
             f"""SELECT c.id, c.resume_id, c.name, c.email, c.phone, c.linkedin,
                        c.location, c.job_title, c.company, c.skills, c.other_details,
                        c.extracted_at,
-                       r.original_filename, r.upload_date, r.status
+                       r.original_filename, r.upload_date, r.status, r.project_id
                 FROM contacts c
                 JOIN resumes r ON c.resume_id = r.id
                 WHERE r.project_id = {P} AND r.user_id = {P}

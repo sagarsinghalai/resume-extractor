@@ -34,15 +34,29 @@ function roleBadge(role) {
 async function fetchFilterOptions() {
   try {
     const res = await fetch(`/api/projects/${PID}/filter-options`);
-    const { locations, job_titles, skills } = await res.json();
+    const { locations, job_titles, skills, uploader_roles } = await res.json();
     populateSelect('filter-location',  locations,  'All Locations');
     populateSelect('filter-job-title', job_titles, 'All Job Titles');
     populateSelect('filter-skill',     skills,     'All Skills');
+
+    // Uploader roles (superadmin only — element may not exist)
+    if (uploader_roles && uploader_roles.length) {
+      const labelMap = { reseller: 'Resellers', customer: 'Customers', superadmin: 'Superadmin' };
+      const sel = document.getElementById('filter-uploader-role');
+      if (sel) {
+        const cur = sel.value;
+        sel.innerHTML = `<option value="">All Roles</option>`
+          + uploader_roles.map(r =>
+              `<option value="${esc(r)}"${r === cur ? ' selected' : ''}>${labelMap[r] || esc(r)}</option>`
+            ).join('');
+      }
+    }
   } catch (e) { console.warn('Filter options error', e); }
 }
 
 function populateSelect(id, values, placeholder) {
   const sel = document.getElementById(id);
+  if (!sel) return;
   const current = sel.value;
   sel.innerHTML = `<option value="">${placeholder}</option>`
     + values.map(v => `<option value="${esc(v)}"${v === current ? ' selected' : ''}>${esc(v)}</option>`).join('');
@@ -51,19 +65,21 @@ function populateSelect(id, values, placeholder) {
 // ── Contacts Table ─────────────────────────────────────────────────────────
 
 async function fetchContacts() {
-  const search   = document.getElementById('search-input').value.trim();
-  const location = document.getElementById('filter-location').value;
-  const jobTitle = document.getElementById('filter-job-title').value;
-  const skill    = document.getElementById('filter-skill').value;
+  const search       = document.getElementById('search-input').value.trim();
+  const location     = document.getElementById('filter-location').value;
+  const jobTitle     = document.getElementById('filter-job-title').value;
+  const skill        = document.getElementById('filter-skill').value;
+  const uploaderRole = document.getElementById('filter-uploader-role')?.value || '';
 
   const params = new URLSearchParams();
-  if (search)   params.set('search',    search);
-  if (location) params.set('location',  location);
-  if (jobTitle) params.set('job_title', jobTitle);
-  if (skill)    params.set('skill',     skill);
+  if (search)       params.set('search',       search);
+  if (location)     params.set('location',      location);
+  if (jobTitle)     params.set('job_title',     jobTitle);
+  if (skill)        params.set('skill',         skill);
+  if (uploaderRole) params.set('uploader_role', uploaderRole);
 
-  document.getElementById('clear-filters-btn')
-    .classList.toggle('d-none', !(search || location || jobTitle || skill));
+  const anyActive = !!(search || location || jobTitle || skill || uploaderRole);
+  document.getElementById('clear-filters-btn').classList.toggle('d-none', !anyActive);
 
   try {
     const res = await fetch(`/api/projects/${PID}/contacts?` + params.toString());
@@ -186,15 +202,18 @@ document.getElementById('search-input').addEventListener('input', () => {
   searchDebounce = setTimeout(fetchContacts, 300);
 });
 
-['filter-location', 'filter-job-title', 'filter-skill'].forEach(id =>
-  document.getElementById(id).addEventListener('change', fetchContacts)
-);
+['filter-location', 'filter-job-title', 'filter-skill', 'filter-uploader-role'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', fetchContacts);
+});
 
 document.getElementById('clear-filters-btn').addEventListener('click', () => {
-  document.getElementById('search-input').value    = '';
+  document.getElementById('search-input').value     = '';
   document.getElementById('filter-location').value  = '';
   document.getElementById('filter-job-title').value = '';
   document.getElementById('filter-skill').value     = '';
+  const roleEl = document.getElementById('filter-uploader-role');
+  if (roleEl) roleEl.value = '';
   fetchContacts();
 });
 
