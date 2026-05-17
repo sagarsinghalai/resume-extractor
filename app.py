@@ -116,6 +116,20 @@ def project_detail_page(project_id):
 
 # ── Superadmin: user management ───────────────────────────────────────────────
 
+@app.route("/admin/data")
+@superadmin_required
+def admin_data():
+    return render_template("admin_data.html")
+
+
+@app.route("/api/admin/projects")
+@superadmin_required
+def api_admin_projects():
+    owner_role = request.args.get("role", "").strip()
+    projects = database.get_admin_projects(owner_role if owner_role else None)
+    return jsonify(projects)
+
+
 @app.route("/admin/users")
 @superadmin_required
 def admin_users():

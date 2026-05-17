@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Data Export — Resume Extractor{% endblock %}
+
+{% block content %}
+
+<!-- Page Header -->
+<div class="d-flex align-items-center mb-4 flex-wrap gap-2">
+  <div>
+    <h4 class="fw-bold mb-0">
+      <i class="bi bi-funnel-fill me-2 text-primary"></i>Admin Data Export
+    </h4>
+    <div class="text-muted small mt-1">Filter by role and project, then download the contact list</div>
+  </div>
+</div>
+
+<!-- Filter Card -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header border-0 py-3 px-4 fw-semibold text-white"
+       style="background: linear-gradient(135deg,#0f3460,#1a73e8)">
+    <i class="bi bi-sliders me-2"></i>Select Data to Export
+  </div>
+  <div class="card-body p-4">
+    <div class="row g-3 align-items-end">
+
+      <!-- Step 1: Role -->
+      <div class="col-12 col-md-4">
+        <label class="form-label fw-semibold small">
+          <span class="badge bg-primary rounded-circle me-1">1</span>
+          Filter by Role
+        </label>
+        <select id="role-filter" class="form-select">
+          <option value="">All Resellers &amp; Customers</option>
+          <option value="reseller">Resellers only</option>
+          <option value="customer">Customers only</option>
+        </select>
+      </div>
+
+      <!-- Step 2: Project -->
+      <div class="col-12 col-md-5">
+        <label class="form-label fw-semibold small">
+          <span class="badge bg-primary rounded-circle me-1">2</span>
+          Select Project
+        </label>
+        <select id="project-filter" class="form-select" disabled>
+          <option value="">— Choose a role first —</option>
+        </select>
+        <div class="form-text" id="project-hint"></div>
+      </div>
+
+      <!-- Export Button -->
+      <div class="col-12 col-md-3">
+        <button id="export-btn" class="btn btn-success w-100" disabled>
+          <i class="bi bi-file-earmark-excel me-1"></i>Download Excel
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Results Section (hidden until project selected) -->
+<div id="results-section" class="d-none">
+
+  <!-- Result Header -->
+  <div class="d-flex align-items-center mb-3 flex-wrap gap-2">
+    <div id="results-title" class="fw-semibold fs-5"></div>
+    <div id="results-meta" class="ms-auto text-muted small"></div>
+  </div>
+
+  <!-- Search + Filters -->
+  <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
+    <div class="input-group flex-grow-1" style="max-width:360px">
+      <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+      <input type="text" id="search-input" class="form-control border-start-0"
+             placeholder="Search name, email, company...">
+    </div>
+    <select id="filter-location"  class="form-select form-select-sm w-auto"><option value="">All Locations</option></select>
+    <select id="filter-job-title" class="form-select form-select-sm w-auto"><option value="">All Job Titles</option></select>
+    <select id="filter-skill"     class="form-select form-select-sm w-auto"><option value="">All Skills</option></select>
+    <button id="clear-filters-btn" class="btn btn-sm btn-outline-secondary d-none">
+      <i class="bi bi-x-circle me-1"></i>Clear
+    </button>
+  </div>
+
+  <!-- Contacts Table -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="admin-contacts-table">
+          <thead>
+            <tr class="table-dark">
+              <th class="ps-3">#</th>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th>Location</th>
+              <th>Job Title</th>
+              <th>Company</th>
+              <th>Skills</th>
+              <th>Links</th>
+              <th>Uploaded By</th>
+              <th>Source File</th>
+            </tr>
+          </thead>
+          <tbody id="contacts-tbody">
+            <tr><td colspan="11" class="text-center text-muted py-4">
+              Select a project above to view contacts.
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-footer text-muted small" id="table-footer"></div>
+  </div>
+
+</div><!-- /results-section -->
+
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/admin_data.js"></script>
+{% endblock %}

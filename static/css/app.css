@@ -70,3 +70,22 @@
 /* ── Scrollable table wrapper ───────────────────────────────────── */
 .table-responsive { max-height: 65vh; }
 .table-responsive thead th { position: sticky; top: 0; z-index: 1; }
+
+/* ── Admin data table (same rules as contacts-table) ─────────────── */
+#admin-contacts-table thead th {
+  white-space: nowrap;
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+#admin-contacts-table td {
+  font-size: 0.875rem;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#admin-contacts-table td.wrap {
+  white-space: normal;
+  max-width: 220px;
+}

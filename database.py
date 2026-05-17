@@ -510,6 +510,58 @@ def delete_project(project_id: int):
     conn.close()
 
 
+def get_admin_projects(owner_role: str = None) -> list:
+    """Superadmin only: all projects belonging to resellers/customers, optionally filtered by role."""
+    conn = get_conn()
+    cur = conn.cursor()
+
+    # Default scope: resellers + customers (not superadmin's own projects)
+    allowed_roles = ("reseller", "customer")
+
+    if owner_role and owner_role in allowed_roles:
+        cur.execute(
+            f"""SELECT p.id, p.name, p.description, p.created_at,
+                       u.id       AS owner_id,
+                       u.username AS owner_username,
+                       u.role     AS owner_role,
+                       COUNT(DISTINCT r.id)  AS resume_count,
+                       COUNT(DISTINCT c.id)  AS contact_count
+                FROM projects p
+                JOIN  users u    ON p.user_id    = u.id
+                LEFT JOIN resumes r  ON r.project_id = p.id
+                LEFT JOIN contacts c ON c.resume_id  = r.id
+                WHERE u.role = {P}
+                GROUP BY p.id, p.name, p.description, p.created_at,
+                         u.id, u.username, u.role
+                ORDER BY u.username ASC, p.name ASC""",
+            (owner_role,),
+        )
+    else:
+        cur.execute(
+            """SELECT p.id, p.name, p.description, p.created_at,
+                      u.id       AS owner_id,
+                      u.username AS owner_username,
+                      u.role     AS owner_role,
+                      COUNT(DISTINCT r.id)  AS resume_count,
+                      COUNT(DISTINCT c.id)  AS contact_count
+               FROM projects p
+               JOIN  users u    ON p.user_id    = u.id
+               LEFT JOIN resumes r  ON r.project_id = p.id
+               LEFT JOIN contacts c ON c.resume_id  = r.id
+               WHERE u.role IN ('reseller','customer')
+               GROUP BY p.id, p.name, p.description, p.created_at,
+                        u.id, u.username, u.role
+               ORDER BY u.role ASC, u.username ASC, p.name ASC"""
+        )
+
+    rows = _rows(cur)
+    conn.close()
+    for r in rows:
+        if r.get("created_at") and not isinstance(r["created_at"], str):
+            r["created_at"] = str(r["created_at"])
+    return rows
+
+
 def _process_contact_rows(rows: list) -> list:
     """Shared post-processing for contact query results."""
     result = []

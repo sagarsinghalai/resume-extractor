@@ -33,9 +33,14 @@
         </a>
         {% if session.role == 'superadmin' %}
           <a class="nav-link text-white px-3 py-2 rounded
-                    {% if '/admin' in request.path %}bg-white bg-opacity-10{% endif %}"
+                    {% if request.path == '/admin/users' %}bg-white bg-opacity-10{% endif %}"
              href="/admin/users">
             <i class="bi bi-people-fill me-1"></i>Users
+          </a>
+          <a class="nav-link text-white px-3 py-2 rounded
+                    {% if request.path == '/admin/data' %}bg-white bg-opacity-10{% endif %}"
+             href="/admin/data">
+            <i class="bi bi-funnel-fill me-1"></i>Data Export
           </a>
         {% endif %}
 
