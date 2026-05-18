@@ -127,6 +127,7 @@ def _seed_site_settings(conn):
         ("razorpay_url_monthly",  ""),
         ("razorpay_url_annual",   ""),
         ("razorpay_url_lifetime", ""),
+        ("razorpay_webhook_secret", ""),
     ]:
         cur.execute(f"SELECT key FROM site_settings WHERE key={P}", (key,))
         if _row(cur) is None:
@@ -342,6 +343,95 @@ def update_user_full(user_id: int, username: str, email: str, phone: str,
     )
     conn.commit()
     conn.close()
+
+
+def find_or_create_user_from_payment(email: str, name: str, phone: str,
+                                     membership_type: str, amount: float,
+                                     payment_id: str):
+    """Called from Razorpay webhook. Finds user by email or creates a new
+    customer account, updates membership, and records the payment."""
+    import secrets as _secrets
+    from datetime import datetime as _dt, timedelta as _td
+    from werkzeug.security import generate_password_hash
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    # --- Look up existing user by email ---
+    cur.execute(f"SELECT id, username FROM users WHERE email={P}", (email,))
+    existing = _row(cur)
+
+    if existing:
+        user_id = existing["id"]
+        # Determine expiry
+        if membership_type == "monthly":
+            expiry = (_dt.utcnow() + _td(days=30)).strftime("%Y-%m-%d")
+        elif membership_type == "annual":
+            expiry = (_dt.utcnow() + _td(days=365)).strftime("%Y-%m-%d")
+        else:
+            expiry = None  # lifetime — never expires
+        cur.execute(
+            f"UPDATE users SET membership_type={P}, amount_paid={P}, date_of_expiry={P} WHERE id={P}",
+            (membership_type, amount, expiry, user_id),
+        )
+        conn.commit()
+        conn.close()
+    else:
+        # Build a unique username from name or email prefix
+        base = (name.replace(" ", "").lower()[:20] if name
+                else email.split("@")[0][:20])
+        # Sanitise to alphanumeric + underscore
+        import re as _re
+        base = _re.sub(r"[^a-z0-9_]", "", base) or "user"
+        username = base
+        suffix = 1
+        while True:
+            cur.execute(f"SELECT id FROM users WHERE username={P}", (username,))
+            if _row(cur) is None:
+                break
+            username = f"{base}{suffix}"
+            suffix += 1
+
+        random_pw = _secrets.token_urlsafe(12)  # user resets via forgot-password
+
+        if membership_type == "monthly":
+            expiry = (_dt.utcnow() + _td(days=30)).strftime("%Y-%m-%d")
+        elif membership_type == "annual":
+            expiry = (_dt.utcnow() + _td(days=365)).strftime("%Y-%m-%d")
+        else:
+            expiry = None
+
+        if DATABASE_URL:
+            cur.execute(
+                f"""INSERT INTO users
+                    (username, email, password_hash, role, phone,
+                     membership_type, amount_paid, date_of_expiry)
+                    VALUES ({P},{P},{P},{P},{P},{P},{P},{P}) RETURNING id""",
+                (username, email, generate_password_hash(random_pw), "customer",
+                 phone or None, membership_type, amount, expiry),
+            )
+            user_id = cur.fetchone()[0]
+        else:
+            cur.execute(
+                f"""INSERT INTO users
+                    (username, email, password_hash, role, phone,
+                     membership_type, amount_paid, date_of_expiry)
+                    VALUES ({P},{P},{P},{P},{P},{P},{P},{P})""",
+                (username, email, generate_password_hash(random_pw), "customer",
+                 phone or None, membership_type, amount, expiry),
+            )
+            user_id = cur.lastrowid
+
+        conn.commit()
+        conn.close()
+
+    # Always record the payment transaction
+    from datetime import datetime as _dt2
+    add_payment_history(
+        user_id, membership_type, amount,
+        _dt2.utcnow().strftime("%Y-%m-%d"),
+        f"Razorpay: {payment_id}",
+    )
 
 
 # ── Leads ─────────────────────────────────────────────────────────────────────

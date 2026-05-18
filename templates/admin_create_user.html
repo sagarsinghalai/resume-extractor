@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Create New User — Resume Extractor{% endblock %}
+
+{% block head %}
+<style>
+  .section-label {
+    font-size: .7rem; font-weight: 700; letter-spacing: .07em;
+    text-transform: uppercase; color: #6c757d; margin-bottom: .5rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb" style="font-size:.82rem">
+    <li class="breadcrumb-item"><a href="/admin/users">User Management</a></li>
+    <li class="breadcrumb-item active">Create New User</li>
+  </ol>
+</nav>
+
+<!-- Header -->
+<div class="d-flex align-items-center mb-4">
+  <div>
+    <h4 class="fw-bold mb-0"><i class="bi bi-person-plus-fill me-2 text-primary"></i>Create New User</h4>
+    <p class="text-muted small mb-0">Fill in the details below. Password can be reset by the user via Forgot Password.</p>
+  </div>
+  <a href="/admin/users" class="btn btn-outline-secondary btn-sm ms-auto">
+    <i class="bi bi-arrow-left me-1"></i>Back to Users
+  </a>
+</div>
+
+<!-- Flash messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }} alert-dismissible fade show py-2" role="alert">
+      {{ msg }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  {% endfor %}
+{% endwith %}
+
+<form method="POST" action="/admin/users/create">
+<div class="row g-4">
+
+  <!-- Left: Account Info -->
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header border-0 py-2 px-3 fw-semibold text-white small"
+           style="background:linear-gradient(135deg,#0f3460,#1a73e8)">
+        <i class="bi bi-person me-1"></i>Account Details
+      </div>
+      <div class="card-body p-4">
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Username <span class="text-danger">*</span></label>
+          <input type="text" name="username" class="form-control" required
+                 placeholder="e.g. john_doe" autofocus>
+          <div class="form-text">Used to log in. No spaces.</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Email Address</label>
+          <input type="email" name="email" class="form-control"
+                 placeholder="user@example.com">
+          <div class="form-text">Required if user needs to reset their password.</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Phone</label>
+          <input type="text" name="phone" class="form-control" placeholder="+91 98765 43210">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Password <span class="text-danger">*</span></label>
+          <input type="password" name="password" class="form-control" required
+                 placeholder="Set a temporary password">
+          <div class="form-text">User can change this via Forgot Password.</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Role <span class="text-danger">*</span></label>
+          <select name="role" id="create-role-select" class="form-select">
+            <option value="customer">Customer</option>
+            <option value="reseller">Reseller</option>
+            <option value="superadmin">Superadmin</option>
+          </select>
+        </div>
+
+        <!-- Reseller assignment (only for customers) -->
+        <div class="mb-3" id="reseller-assign-col">
+          <label class="form-label fw-semibold">Assign Reseller</label>
+          <select name="reseller_id" class="form-select">
+            <option value="">— None —</option>
+            {% for r in resellers %}
+              <option value="{{ r.id }}">{{ r.username }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text">Optional: link this customer under a reseller account.</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Membership -->
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header border-0 py-2 px-3 fw-semibold text-white small"
+           style="background:linear-gradient(135deg,#0f3460,#1a73e8)">
+        <i class="bi bi-credit-card me-1"></i>Membership & Billing
+      </div>
+      <div class="card-body p-4">
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Membership Plan</label>
+          <select name="membership_type" class="form-select">
+            <option value="">— None —</option>
+            <option value="monthly">Monthly  — ₹500/mo</option>
+            <option value="annual">Annual   — ₹4,500/yr</option>
+            <option value="lifetime">Lifetime — ₹10,000 one-time</option>
+            <option value="reseller">Reseller</option>
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Amount Paid (₹)</label>
+          <input type="number" step="0.01" name="amount_paid" class="form-control"
+                 placeholder="0.00">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Membership Expiry</label>
+          <input type="date" name="date_of_expiry" class="form-control">
+          <div class="form-text">Leave blank for lifetime / no expiry.</div>
+        </div>
+
+        <div class="alert alert-info py-2 small mb-0">
+          <i class="bi bi-info-circle me-1"></i>
+          Customers who pay via Razorpay payment links are <strong>created automatically</strong>
+          — you only need this form for manually-added accounts.
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div><!-- /row -->
+
+<div class="d-flex gap-3 mt-4">
+  <button type="submit" class="btn btn-primary fw-semibold px-4">
+    <i class="bi bi-person-check me-2"></i>Create User
+  </button>
+  <a href="/admin/users" class="btn btn-outline-secondary">Cancel</a>
+</div>
+</form>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const roleSelect = document.getElementById('create-role-select');
+  const resellerCol = document.getElementById('reseller-assign-col');
+  roleSelect.addEventListener('change', function () {
+    resellerCol.style.display = this.value === 'customer' ? '' : 'none';
+  });
+  roleSelect.dispatchEvent(new Event('change'));
+</script>
+{% endblock %}

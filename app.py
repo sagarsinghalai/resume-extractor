@@ -1,6 +1,8 @@
 import os
 import io
 import json
+import hmac
+import hashlib
 import secrets
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -238,16 +240,18 @@ def admin_data():
 def admin_site_settings():
     if request.method == "POST":
         for key in ("hubspot_form_code", "contact_us_content",
-                    "razorpay_url_monthly", "razorpay_url_annual", "razorpay_url_lifetime"):
+                    "razorpay_url_monthly", "razorpay_url_annual", "razorpay_url_lifetime",
+                    "razorpay_webhook_secret"):
             database.set_site_setting(key, request.form.get(key, ""))
         flash("Site settings saved.", "success")
         return redirect(url_for("admin_site_settings"))
     return render_template("admin_site_settings.html",
-        hubspot_form_code    = database.get_site_setting("hubspot_form_code"),
-        contact_us_content   = database.get_site_setting("contact_us_content"),
-        razorpay_url_monthly  = database.get_site_setting("razorpay_url_monthly"),
-        razorpay_url_annual   = database.get_site_setting("razorpay_url_annual"),
-        razorpay_url_lifetime = database.get_site_setting("razorpay_url_lifetime"),
+        hubspot_form_code        = database.get_site_setting("hubspot_form_code"),
+        contact_us_content       = database.get_site_setting("contact_us_content"),
+        razorpay_url_monthly     = database.get_site_setting("razorpay_url_monthly"),
+        razorpay_url_annual      = database.get_site_setting("razorpay_url_annual"),
+        razorpay_url_lifetime    = database.get_site_setting("razorpay_url_lifetime"),
+        razorpay_webhook_secret  = database.get_site_setting("razorpay_webhook_secret"),
     )
 
 
@@ -305,6 +309,14 @@ def admin_user_detail(user_id):
     )
 
 
+@app.route("/admin/users/new")
+@superadmin_required
+def admin_new_user_page():
+    all_users = database.get_all_users()
+    resellers = [u for u in all_users if u["role"] == "reseller"]
+    return render_template("admin_create_user.html", resellers=resellers)
+
+
 @app.route("/admin/users/create", methods=["POST"])
 @superadmin_required
 def admin_create_user():
@@ -319,10 +331,10 @@ def admin_create_user():
 
     if role not in ("superadmin", "reseller", "customer"):
         flash("Invalid role.", "danger")
-        return redirect(url_for("admin_users"))
+        return redirect(url_for("admin_new_user_page"))
     if not username or not password:
         flash("Username and password are required.", "danger")
-        return redirect(url_for("admin_users"))
+        return redirect(url_for("admin_new_user_page"))
 
     reseller_id_raw = request.form.get("reseller_id", "").strip()
     reseller_id_val = int(reseller_id_raw) if reseller_id_raw else None
@@ -340,9 +352,10 @@ def admin_create_user():
     )
     if result is None:
         flash(f"Username '{username}' already exists.", "danger")
-    else:
-        flash(f"User '{username}' ({role}) created successfully.", "success")
-    return redirect(url_for("admin_users"))
+        return redirect(url_for("admin_new_user_page"))
+
+    flash(f"User '{username}' ({role}) created successfully.", "success")
+    return redirect(url_for("admin_user_detail", user_id=result["id"]))
 
 
 @app.route("/admin/users/<int:user_id>/delete", methods=["POST"])
@@ -476,6 +489,67 @@ def api_user_payment_history(user_id):
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
+@app.route("/api/webhooks/razorpay", methods=["POST"])
+def razorpay_webhook():
+    """Razorpay payment_link.paid webhook — auto-creates/updates user on payment."""
+    raw_body = request.get_data()
+
+    # Verify signature when secret is configured
+    webhook_secret = database.get_site_setting("razorpay_webhook_secret")
+    if webhook_secret:
+        sig = request.headers.get("X-Razorpay-Signature", "")
+        expected = hmac.new(
+            webhook_secret.encode("utf-8"), raw_body, hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(expected, sig):
+            return jsonify({"error": "Invalid signature"}), 400
+
+    data = request.get_json(force=True) or {}
+    event = data.get("event", "")
+
+    if event == "payment_link.paid":
+        payload      = data.get("payload", {})
+        payment      = payload.get("payment", {}).get("entity", {})
+        payment_link = payload.get("payment_link", {}).get("entity", {})
+
+        email       = (payment.get("email") or "").strip()
+        contact     = (payment.get("contact") or "").strip()
+        notes       = payment.get("notes") or {}
+        name        = ""
+        if isinstance(notes, dict):
+            name = (notes.get("name") or notes.get("Name") or
+                    notes.get("customer_name") or "").strip()
+
+        amount_paise = int(payment.get("amount") or 0)
+        amount_inr   = amount_paise / 100
+        payment_id   = payment.get("id", "")
+
+        # Map amount → membership type
+        # ₹500 monthly | ₹4500 annual | ₹10000 lifetime
+        if amount_paise <= 55000:          # ≤ ₹550 (buffer for taxes)
+            membership_type = "monthly"
+        elif amount_paise <= 500000:       # ≤ ₹5000
+            membership_type = "annual"
+        else:
+            membership_type = "lifetime"
+
+        if email:
+            try:
+                database.find_or_create_user_from_payment(
+                    email=email,
+                    name=name,
+                    phone=contact,
+                    membership_type=membership_type,
+                    amount=amount_inr,
+                    payment_id=payment_id,
+                )
+            except Exception as exc:
+                print(f"[Razorpay webhook] Error processing payment: {exc}")
+                return jsonify({"error": "Processing failed"}), 500
+
+    return jsonify({"ok": True}), 200
+
 
 @app.route("/api/leads", methods=["POST"])
 def api_save_lead():
