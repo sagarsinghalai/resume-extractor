@@ -1,6 +1,8 @@
 import os
 import io
 import json
+import secrets
+from datetime import datetime, timedelta
 from pathlib import Path
 from functools import wraps
 from concurrent.futures import ThreadPoolExecutor
@@ -20,6 +22,21 @@ load_dotenv(Path(__file__).parent / ".env", override=True)
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY") or os.urandom(32)
 app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
+
+# Flask-Mail (optional — graceful fallback if not installed/configured)
+try:
+    from flask_mail import Mail, Message as MailMessage
+    app.config["MAIL_SERVER"]   = os.getenv("MAIL_SERVER", "smtp.gmail.com")
+    app.config["MAIL_PORT"]     = int(os.getenv("MAIL_PORT", 587))
+    app.config["MAIL_USE_TLS"]  = True
+    app.config["MAIL_USERNAME"] = os.getenv("MAIL_USERNAME", "")
+    app.config["MAIL_PASSWORD"] = os.getenv("MAIL_PASSWORD", "")
+    app.config["MAIL_DEFAULT_SENDER"] = os.getenv("MAIL_FROM", os.getenv("MAIL_USERNAME", "noreply@example.com"))
+    mail = Mail(app)
+    MAIL_ENABLED = bool(os.getenv("MAIL_USERNAME"))
+except ImportError:
+    mail = None
+    MAIL_ENABLED = False
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 executor = ThreadPoolExecutor(max_workers=3)
@@ -57,6 +74,30 @@ def allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() == "pdf"
 
 
+# ── Public page routes ────────────────────────────────────────────────────────
+
+@app.route("/")
+def landing():
+    return render_template("landing.html")
+
+
+@app.route("/pricing")
+def pricing():
+    return render_template("pricing.html")
+
+
+@app.route("/reseller")
+def reseller_landing():
+    hubspot_embed_code = database.get_site_setting("hubspot_form_code")
+    return render_template("reseller_landing.html", hubspot_embed_code=hubspot_embed_code)
+
+
+@app.route("/contact")
+def contact():
+    content = database.get_site_setting("contact_us_content")
+    return render_template("contact.html", content=content)
+
+
 # ── Auth routes ───────────────────────────────────────────────────────────────
 
 @app.route("/login", methods=["GET", "POST"])
@@ -84,9 +125,75 @@ def logout():
     return redirect(url_for("login"))
 
 
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip()
+        user = database.get_user_by_email(email)
+        if user:
+            token = secrets.token_urlsafe(32)
+            expires_at = (datetime.utcnow() + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
+            database.create_reset_token(user["id"], token, expires_at)
+            reset_url = url_for("reset_password", token=token, _external=True)
+
+            if MAIL_ENABLED and mail:
+                try:
+                    msg = MailMessage(
+                        subject="Password Reset — Resume Extractor",
+                        recipients=[email],
+                        body=f"Click the link below to reset your password (valid 1 hour):\n\n{reset_url}\n\nIf you did not request this, ignore this email.",
+                    )
+                    mail.send(msg)
+                except Exception as e:
+                    print(f"Mail send error: {e}")
+                    # Dev fallback: flash the link
+                    flash(f"(Dev) Reset link: {reset_url}", "info")
+            else:
+                # Dev fallback: flash the reset link directly
+                flash(f"Dev mode — reset link: {reset_url}", "info")
+
+        flash("If that email is registered, you'll receive a reset link.", "success")
+        return redirect(url_for("forgot_password"))
+    return render_template("forgot_password.html")
+
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    row = database.get_reset_token(token)
+    if not row:
+        flash("Invalid or expired reset link.", "danger")
+        return redirect(url_for("login"))
+
+    # Check expiry
+    try:
+        expires_at = datetime.strptime(row["expires_at"], "%Y-%m-%d %H:%M:%S")
+        if datetime.utcnow() > expires_at:
+            database.delete_reset_token(token)
+            flash("Reset link has expired. Please request a new one.", "danger")
+            return redirect(url_for("forgot_password"))
+    except Exception:
+        database.delete_reset_token(token)
+        flash("Invalid reset link.", "danger")
+        return redirect(url_for("login"))
+
+    if request.method == "POST":
+        new_password = request.form.get("new_password", "")
+        confirm      = request.form.get("confirm_password", "")
+        if not new_password:
+            return render_template("reset_password.html", token=token, error="Password cannot be empty.")
+        if new_password != confirm:
+            return render_template("reset_password.html", token=token, error="Passwords do not match.")
+        database.update_user_password(row["user_id"], new_password)
+        database.delete_reset_token(token)
+        flash("Password reset successfully. Please log in.", "success")
+        return redirect(url_for("login"))
+
+    return render_template("reset_password.html", token=token)
+
+
 # ── Page routes ───────────────────────────────────────────────────────────────
 
-@app.route("/")
+@app.route("/dashboard")
 @login_required
 def dashboard():
     return render_template("dashboard.html")
@@ -122,6 +229,41 @@ def admin_data():
     return render_template("admin_data.html")
 
 
+@app.route("/admin/site-settings", methods=["GET", "POST"])
+@superadmin_required
+def admin_site_settings():
+    if request.method == "POST":
+        hubspot_form_code = request.form.get("hubspot_form_code", "")
+        contact_us_content = request.form.get("contact_us_content", "")
+        database.set_site_setting("hubspot_form_code", hubspot_form_code)
+        database.set_site_setting("contact_us_content", contact_us_content)
+        flash("Site settings saved.", "success")
+        return redirect(url_for("admin_site_settings"))
+    hubspot_form_code = database.get_site_setting("hubspot_form_code")
+    contact_us_content = database.get_site_setting("contact_us_content")
+    return render_template(
+        "admin_site_settings.html",
+        hubspot_form_code=hubspot_form_code,
+        contact_us_content=contact_us_content,
+    )
+
+
+@app.route("/admin/leads")
+@superadmin_required
+def admin_leads():
+    leads = database.get_all_leads()
+    return render_template("admin_leads.html", leads=leads)
+
+
+@app.route("/api/admin/users-by-role")
+@superadmin_required
+def api_admin_users_by_role():
+    role = request.args.get("role", "").strip()
+    if role not in ("superadmin", "reseller", "customer"):
+        return jsonify([])
+    return jsonify(database.get_users_by_role(role))
+
+
 @app.route("/api/admin/projects")
 @superadmin_required
 def api_admin_projects():
@@ -141,10 +283,14 @@ def admin_users():
 @app.route("/admin/users/create", methods=["POST"])
 @superadmin_required
 def admin_create_user():
-    username = request.form.get("username", "").strip()
-    email    = request.form.get("email", "").strip()
-    password = request.form.get("password", "")
-    role     = request.form.get("role", "customer")
+    username        = request.form.get("username", "").strip()
+    email           = request.form.get("email", "").strip()
+    password        = request.form.get("password", "")
+    role            = request.form.get("role", "customer")
+    phone           = request.form.get("phone", "").strip()
+    membership_type = request.form.get("membership_type", "").strip()
+    amount_paid_raw = request.form.get("amount_paid", "").strip()
+    date_of_expiry  = request.form.get("date_of_expiry", "").strip()
 
     if role not in ("superadmin", "reseller", "customer"):
         flash("Invalid role.", "danger")
@@ -155,11 +301,18 @@ def admin_create_user():
 
     reseller_id_raw = request.form.get("reseller_id", "").strip()
     reseller_id_val = int(reseller_id_raw) if reseller_id_raw else None
-    # Only attach a reseller if creating a customer account
     if role != "customer":
         reseller_id_val = None
 
-    result = database.create_user(username, email, password, role, reseller_id_val)
+    amount_paid_val = float(amount_paid_raw) if amount_paid_raw else None
+
+    result = database.create_user(
+        username, email, password, role, reseller_id_val,
+        phone=phone or None,
+        membership_type=membership_type or None,
+        amount_paid=amount_paid_val,
+        date_of_expiry=date_of_expiry or None,
+    )
     if result is None:
         flash(f"Username '{username}' already exists.", "danger")
     else:
@@ -198,6 +351,51 @@ def admin_change_password(user_id):
     database.update_user_password(user_id, new_password)
     flash("Password updated successfully.", "success")
     return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/users/<int:user_id>/update-profile", methods=["POST"])
+@superadmin_required
+def admin_update_user_profile(user_id):
+    phone           = request.form.get("phone", "").strip()
+    membership_type = request.form.get("membership_type", "").strip()
+    amount_paid     = request.form.get("amount_paid", "").strip()
+    date_of_expiry  = request.form.get("date_of_expiry", "").strip()
+    database.update_user_profile(user_id, phone, membership_type, amount_paid, date_of_expiry)
+    flash("User profile updated.", "success")
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/users/<int:user_id>/add-payment", methods=["POST"])
+@superadmin_required
+def admin_add_payment(user_id):
+    membership_type = request.form.get("membership_type", "").strip()
+    amount          = request.form.get("amount", "").strip()
+    payment_date    = request.form.get("payment_date", "").strip()
+    notes           = request.form.get("notes", "").strip()
+    database.add_payment_history(user_id, membership_type, amount, payment_date, notes)
+    flash("Payment record added.", "success")
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/api/admin/users/<int:user_id>/payment-history")
+@superadmin_required
+def api_user_payment_history(user_id):
+    return jsonify(database.get_all_payment_history(user_id))
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
+@app.route("/api/leads", methods=["POST"])
+def api_save_lead():
+    data       = request.get_json() or {}
+    name       = (data.get("name") or "").strip()
+    email      = (data.get("email") or "").strip()
+    phone      = (data.get("phone") or "").strip()
+    profession = (data.get("profession") or "").strip()
+    if not name or not email:
+        return jsonify({"error": "Name and email are required."}), 400
+    database.save_lead(name, email, phone, profession)
+    return jsonify({"ok": True}), 201
 
 
 # ── API routes ────────────────────────────────────────────────────────────────

@@ -1,0 +1,77 @@
+{% extends "base_public.html" %}
+{% block title %}Become a Reseller — Resume Extractor{% endblock %}
+
+{% block content %}
+
+<!-- Hero -->
+<section class="py-5 text-center" style="background: linear-gradient(135deg,#1a1a2e,#0f3460); color:#fff">
+  <div class="container py-3">
+    <h1 class="display-5 fw-bold mb-3">Join Our Reseller Program</h1>
+    <p class="lead mb-4" style="opacity:.85">
+      Earn money by selling Resume Extractor to your clients. Set your own prices, keep the margin.
+    </p>
+    <a href="#apply" class="btn btn-info btn-lg fw-semibold px-5">
+      <i class="bi bi-arrow-down-circle me-2"></i>Apply Now
+    </a>
+  </div>
+</section>
+
+<!-- Benefits -->
+<section class="py-5">
+  <div class="container">
+    <h2 class="text-center fw-bold mb-2">Why become a reseller?</h2>
+    <p class="text-center text-muted mb-5">Everything you need to build a recurring revenue stream.</p>
+    <div class="row g-4">
+      <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100 text-center p-3">
+          <div class="card-body">
+            <div class="mb-3 fs-1">💰</div>
+            <h5 class="fw-bold">Commission on Every Sale</h5>
+            <p class="text-muted">Earn a generous commission for every subscription you sell. Monthly, annual, or lifetime — you earn on all of them.</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100 text-center p-3">
+          <div class="card-body">
+            <div class="mb-3 fs-1">🖥️</div>
+            <h5 class="fw-bold">Your Own Branded Dashboard</h5>
+            <p class="text-muted">Manage all your clients from a single reseller dashboard. Add customers, monitor usage, and track revenue.</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100 text-center p-3">
+          <div class="card-body">
+            <div class="mb-3 fs-1">🤝</div>
+            <h5 class="fw-bold">Full Support &amp; Training</h5>
+            <p class="text-muted">We provide onboarding materials, demo access, and dedicated support so you can sell with confidence.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HubSpot Form / Apply Section -->
+<section class="py-5 bg-white" id="apply">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-lg-8">
+        <h2 class="fw-bold mb-2 text-center">Apply to Become a Reseller</h2>
+        <p class="text-muted text-center mb-4">Fill out the form below and our team will be in touch within 24–48 hours.</p>
+
+        {% if hubspot_embed_code %}
+          {{ hubspot_embed_code | safe }}
+        {% else %}
+          <div class="alert alert-secondary text-center py-4">
+            <i class="bi bi-hourglass-split fs-3 d-block mb-2"></i>
+            <strong>Applications are currently closed</strong> — check back soon.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+
+{% endblock %}

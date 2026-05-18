@@ -6,3 +6,4 @@ pdfplumber
 anthropic
 gunicorn
 psycopg2-binary
+flask-mail

@@ -5,6 +5,12 @@ let pollTimer = null;
 const SHOW_UPLOADER = window.IS_SUPERADMIN || window.IS_RESELLER;
 const COL_SPAN = SHOW_UPLOADER ? 12 : 11;
 
+// ── Cascade state ──────────────────────────────────────────────────────────
+let allProjects  = [];  // full project list (with owner_id / owner_role)
+let allSkills    = [];
+let allJobTitles = [];
+let allLocations = [];
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function esc(str) {
@@ -79,22 +85,52 @@ async function fetchFailed() {
 
 async function fetchFilterOptions() {
   try {
-    const res = await fetch('/api/filter-options');
-    const { locations, job_titles, skills, projects, uploader_roles } = await res.json();
-    populateSelect('filter-location',  locations,  'All Locations');
-    populateSelect('filter-job-title', job_titles, 'All Job Titles');
-    populateSelect('filter-skill',     skills,     'All Skills');
+    const res  = await fetch('/api/filter-options');
+    const data = await res.json();
+    const { locations, job_titles, skills, projects, customers } = data;
 
-    // Projects — value is numeric id, label is project name
-    populateProjectSelect('filter-project', projects);
+    // Store full lists for cascade resets
+    allProjects  = projects   || [];
+    allSkills    = skills     || [];
+    allJobTitles = job_titles || [];
+    allLocations = locations  || [];
 
     // Customers dropdown (reseller only)
     if (customers && customers.length) {
       populateCustomerSelect('filter-customer', customers);
     }
 
-    // Role dropdown is static HTML — no JS re-render needed
+    // Only repopulate projects if no role/customer filter is active
+    const roleEl = document.getElementById('filter-uploader-role');
+    const custEl = document.getElementById('filter-customer');
+    if (!roleEl?.value && !custEl?.value) {
+      populateProjectSelect('filter-project', allProjects);
+    }
+
+    // Only repopulate skill/job/location if no project is selected
+    const projEl = document.getElementById('filter-project');
+    if (!projEl?.value) {
+      populateSelect('filter-skill',     allSkills,    'All Skills');
+      populateSelect('filter-job-title', allJobTitles, 'All Job Titles');
+      populateSelect('filter-location',  allLocations, 'All Locations');
+    }
   } catch (e) { console.warn('Filter options error', e); }
+}
+
+async function fetchProjectFilterOptions(pid) {
+  if (!pid) {
+    populateSelect('filter-skill',     allSkills,    'All Skills');
+    populateSelect('filter-job-title', allJobTitles, 'All Job Titles');
+    populateSelect('filter-location',  allLocations, 'All Locations');
+    return;
+  }
+  try {
+    const res = await fetch(`/api/projects/${pid}/filter-options`);
+    const { skills, job_titles, locations } = await res.json();
+    populateSelect('filter-skill',     skills,     'All Skills');
+    populateSelect('filter-job-title', job_titles, 'All Job Titles');
+    populateSelect('filter-location',  locations,  'All Locations');
+  } catch (e) { /* fall back silently */ }
 }
 
 function populateSelect(id, values, placeholder) {
@@ -127,25 +163,45 @@ function populateCustomerSelect(id, customers) {
 
 // ── Contacts Table ─────────────────────────────────────────────────────────
 
+function showSelectProjectMessage() {
+  const tbody = document.getElementById('contacts-tbody');
+  const footer = document.getElementById('table-footer');
+  tbody.innerHTML = `
+    <tr><td colspan="${COL_SPAN}" class="text-center py-5 text-muted">
+      <i class="bi bi-funnel fs-3 d-block mb-2"></i>
+      <div class="fw-semibold mb-1">Project required</div>
+      <div class="small">Select a project from the filter above to view contacts.</div>
+    </td></tr>`;
+  footer.textContent = '';
+  document.getElementById('clear-filters-btn').classList.remove('d-none');
+}
+
 async function fetchContacts() {
   const search        = document.getElementById('search-input').value.trim();
-  const location      = document.getElementById('filter-location').value;
-  const jobTitle      = document.getElementById('filter-job-title').value;
-  const skill         = document.getElementById('filter-skill').value;
-  const project       = document.getElementById('filter-project').value;
   const uploaderRole  = document.getElementById('filter-uploader-role')?.value || '';
   const customerId    = document.getElementById('filter-customer')?.value || '';
+  const project       = document.getElementById('filter-project').value;
+  const skill         = document.getElementById('filter-skill').value;
+  const jobTitle      = document.getElementById('filter-job-title').value;
+  const location      = document.getElementById('filter-location').value;
+
+  // When a role or customer is selected, require a project before showing data
+  // Customers must always select a project first
+  if ((uploaderRole || customerId || window.IS_CUSTOMER) && !project) {
+    showSelectProjectMessage();
+    return;
+  }
 
   const params = new URLSearchParams();
   if (search)       params.set('search',        search);
-  if (location)     params.set('location',       location);
-  if (jobTitle)     params.set('job_title',      jobTitle);
-  if (skill)        params.set('skill',          skill);
-  if (project)      params.set('project_id',     project);
   if (uploaderRole) params.set('uploader_role',  uploaderRole);
   if (customerId)   params.set('customer_id',    customerId);
+  if (project)      params.set('project_id',     project);
+  if (skill)        params.set('skill',          skill);
+  if (jobTitle)     params.set('job_title',      jobTitle);
+  if (location)     params.set('location',       location);
 
-  const anyActive = !!(search || location || jobTitle || skill || project || uploaderRole || customerId);
+  const anyActive = !!(search || uploaderRole || customerId || project || skill || jobTitle || location);
   document.getElementById('clear-filters-btn').classList.toggle('d-none', !anyActive);
 
   try {
@@ -183,18 +239,15 @@ function renderTable(contacts) {
             class="btn btn-sm btn-outline-primary py-0 px-2" title="${esc(c.linkedin)}">
            <i class="bi bi-linkedin"></i></a>`
       : '';
-
     const pdfBtn = c.resume_id
       ? `<a href="/uploads/${c.resume_id}" target="_blank"
             class="btn btn-sm btn-outline-secondary py-0 px-2" title="View PDF">
            <i class="bi bi-file-pdf"></i></a>`
       : '';
-
     const emailHtml = c.email
       ? `<a href="mailto:${esc(c.email)}" class="text-decoration-none">${esc(c.email)}</a>`
       : '—';
 
-    // "Uploaded By" column — shown to superadmin and reseller
     const uploadedByCell = SHOW_UPLOADER
       ? `<td class="small">${c.uploaded_by_username
           ? esc(c.uploaded_by_username) + roleBadge(c.uploaded_by_role)
@@ -259,30 +312,93 @@ document.getElementById('export-btn').addEventListener('click', async () => {
   }
 });
 
-// ── Search & Filters ───────────────────────────────────────────────────────
+// ── Cascade Event Listeners ────────────────────────────────────────────────
 
+// Search — no cascade, just fetch
 let searchDebounce;
 document.getElementById('search-input').addEventListener('input', () => {
   clearTimeout(searchDebounce);
   searchDebounce = setTimeout(fetchContacts, 300);
 });
 
-['filter-location', 'filter-job-title', 'filter-skill',
- 'filter-project', 'filter-uploader-role', 'filter-customer'].forEach(id => {
+// Role filter (superadmin only) → narrows Projects, resets downstream
+const roleEl = document.getElementById('filter-uploader-role');
+if (roleEl) {
+  roleEl.addEventListener('change', () => {
+    const role    = roleEl.value;
+    const filtered = role
+      ? allProjects.filter(p => p.owner_role === role)
+      : allProjects;
+    populateProjectSelect('filter-project', filtered);
+    // Reset project + downstream values
+    document.getElementById('filter-project').value  = '';
+    document.getElementById('filter-skill').value     = '';
+    document.getElementById('filter-job-title').value = '';
+    document.getElementById('filter-location').value  = '';
+    populateSelect('filter-skill',     allSkills,    'All Skills');
+    populateSelect('filter-job-title', allJobTitles, 'All Job Titles');
+    populateSelect('filter-location',  allLocations, 'All Locations');
+    fetchContacts();
+  });
+}
+
+// Customer filter (reseller only) → narrows Projects, resets downstream
+const custEl = document.getElementById('filter-customer');
+if (custEl) {
+  custEl.addEventListener('change', () => {
+    const custId  = custEl.value ? parseInt(custEl.value, 10) : null;
+    const filtered = custId
+      ? allProjects.filter(p => p.owner_id === custId)
+      : allProjects;
+    populateProjectSelect('filter-project', filtered);
+    document.getElementById('filter-project').value  = '';
+    document.getElementById('filter-skill').value     = '';
+    document.getElementById('filter-job-title').value = '';
+    document.getElementById('filter-location').value  = '';
+    populateSelect('filter-skill',     allSkills,    'All Skills');
+    populateSelect('filter-job-title', allJobTitles, 'All Job Titles');
+    populateSelect('filter-location',  allLocations, 'All Locations');
+    fetchContacts();
+  });
+}
+
+// Project filter → narrows Skills/Job Titles/Locations
+const projEl = document.getElementById('filter-project');
+if (projEl) {
+  projEl.addEventListener('change', async () => {
+    const pid = projEl.value;
+    // Reset downstream values
+    document.getElementById('filter-skill').value     = '';
+    document.getElementById('filter-job-title').value = '';
+    document.getElementById('filter-location').value  = '';
+    // Fetch project-specific options or restore full lists
+    await fetchProjectFilterOptions(pid || null);
+    fetchContacts();
+  });
+}
+
+// Skill → Job Title → Location: just fetch contacts
+['filter-skill', 'filter-job-title', 'filter-location'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('change', fetchContacts);
 });
 
+// Clear all filters
 document.getElementById('clear-filters-btn').addEventListener('click', () => {
-  document.getElementById('search-input').value         = '';
-  document.getElementById('filter-location').value      = '';
-  document.getElementById('filter-job-title').value     = '';
-  document.getElementById('filter-skill').value         = '';
-  document.getElementById('filter-project').value       = '';
-  const roleEl     = document.getElementById('filter-uploader-role');
-  const customerEl = document.getElementById('filter-customer');
-  if (roleEl)     roleEl.value     = '';
-  if (customerEl) customerEl.value = '';
+  document.getElementById('search-input').value     = '';
+  const roleEl = document.getElementById('filter-uploader-role');
+  const custEl = document.getElementById('filter-customer');
+  if (roleEl) roleEl.value = '';
+  if (custEl)  custEl.value = '';
+  document.getElementById('filter-project').value  = '';
+  document.getElementById('filter-skill').value     = '';
+  document.getElementById('filter-job-title').value = '';
+  document.getElementById('filter-location').value  = '';
+  // Restore full project + skill/job/location lists
+  populateProjectSelect('filter-project', allProjects);
+  populateSelect('filter-skill',     allSkills,    'All Skills');
+  populateSelect('filter-job-title', allJobTitles, 'All Job Titles');
+  populateSelect('filter-location',  allLocations, 'All Locations');
   fetchContacts();
 });
 

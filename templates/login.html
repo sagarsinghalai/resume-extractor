@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "base_public.html" %}
 {% block title %}Login — Resume Extractor{% endblock %}
 
 {% block content %}
@@ -47,6 +47,12 @@
             <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
           </button>
         </form>
+
+        <div class="text-center mt-3">
+          <a href="/forgot-password" class="text-muted small">
+            <i class="bi bi-question-circle me-1"></i>Forgot your password?
+          </a>
+        </div>
 
       </div>
     </div>

@@ -71,26 +71,9 @@
   </div>
 </div>
 
-<!-- Filters -->
+<!-- Filters: Roles → Customers → Projects → Skills → Job Titles → Locations -->
 <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
   <i class="bi bi-funnel text-muted"></i>
-  <select id="filter-location" class="form-select form-select-sm w-auto">
-    <option value="">All Locations</option>
-  </select>
-  <select id="filter-job-title" class="form-select form-select-sm w-auto">
-    <option value="">All Job Titles</option>
-  </select>
-  <select id="filter-skill" class="form-select form-select-sm w-auto">
-    <option value="">All Skills</option>
-  </select>
-  <select id="filter-project" class="form-select form-select-sm w-auto">
-    <option value="">All Projects</option>
-  </select>
-  {% if session.role == 'reseller' %}
-  <select id="filter-customer" class="form-select form-select-sm w-auto">
-    <option value="">All Customers</option>
-  </select>
-  {% endif %}
   {% if session.role == 'superadmin' %}
   <select id="filter-uploader-role" class="form-select form-select-sm w-auto">
     <option value="">All Roles</option>
@@ -99,6 +82,23 @@
     <option value="superadmin">Admin</option>
   </select>
   {% endif %}
+  {% if session.role == 'reseller' %}
+  <select id="filter-customer" class="form-select form-select-sm w-auto">
+    <option value="">All Customers</option>
+  </select>
+  {% endif %}
+  <select id="filter-project" class="form-select form-select-sm w-auto">
+    <option value="">All Projects</option>
+  </select>
+  <select id="filter-skill" class="form-select form-select-sm w-auto">
+    <option value="">All Skills</option>
+  </select>
+  <select id="filter-job-title" class="form-select form-select-sm w-auto">
+    <option value="">All Job Titles</option>
+  </select>
+  <select id="filter-location" class="form-select form-select-sm w-auto">
+    <option value="">All Locations</option>
+  </select>
   <button id="clear-filters-btn" class="btn btn-sm btn-outline-secondary d-none">
     <i class="bi bi-x-circle me-1"></i>Clear Filters
   </button>
@@ -167,6 +167,7 @@
 <script>
   window.IS_SUPERADMIN = {{ 'true' if session.role == 'superadmin' else 'false' }};
   window.IS_RESELLER   = {{ 'true' if session.role == 'reseller'   else 'false' }};
+  window.IS_CUSTOMER   = {{ 'true' if session.role == 'customer'   else 'false' }};
 </script>
 <script src="/static/js/dashboard.js"></script>
 {% endblock %}

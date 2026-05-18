@@ -1,0 +1,89 @@
+{% extends "base_public.html" %}
+{% block title %}Pricing — Resume Extractor{% endblock %}
+
+{% block content %}
+
+<section class="py-5">
+  <div class="container">
+    <div class="text-center mb-5">
+      <h1 class="fw-bold">Simple, Transparent Pricing</h1>
+      <p class="text-muted lead">Choose the plan that fits your workflow. No hidden fees.</p>
+    </div>
+
+    <div class="row g-4 justify-content-center align-items-stretch">
+
+      <!-- Monthly Plan -->
+      <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body p-4 d-flex flex-column">
+            <h5 class="fw-bold text-muted text-uppercase small mb-2">Monthly Plan</h5>
+            <div class="mb-3">
+              <span class="display-5 fw-bold">₹500</span>
+              <span class="text-muted">/month</span>
+            </div>
+            <ul class="list-unstyled mb-4 flex-grow-1">
+              <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Unlimited uploads</li>
+              <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>AI extraction</li>
+              <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Excel export</li>
+              <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Email support</li>
+            </ul>
+            <a href="/login" class="btn btn-outline-primary w-100 fw-semibold">Get Started</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Annual Plan (highlighted) -->
+      <div class="col-md-4">
+        <div class="card border-2 border-primary shadow h-100" style="position:relative">
+          <div class="position-absolute top-0 start-50 translate-middle">
+            <span class="badge bg-primary px-3 py-2 fs-6">Popular</span>
+          </div>
+          <div class="card-body p-4 d-flex flex-column pt-5">
+            <h5 class="fw-bold text-muted text-uppercase small mb-2">Annual Plan</h5>
+            <div class="mb-1">
+              <span class="display-5 fw-bold">₹4,500</span>
+              <span class="text-muted">/year</span>
+            </div>
+            <div class="mb-3">
+              <s class="text-muted small">₹6,000</s>
+              <span class="badge bg-success ms-2">Save 25%</span>
+            </div>
+            <ul class="list-unstyled mb-4 flex-grow-1">
+              <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Everything in Monthly</li>
+              <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Priority support</li>
+              <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Advanced filters</li>
+            </ul>
+            <a href="/login" class="btn btn-primary w-100 fw-semibold">Get Started</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lifetime Access -->
+      <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100" style="background:#1a1a2e;color:#fff">
+          <div class="card-body p-4 d-flex flex-column">
+            <h5 class="fw-bold text-uppercase small mb-2" style="opacity:.7">Lifetime Access</h5>
+            <div class="mb-3">
+              <span class="display-5 fw-bold">₹10,000</span>
+              <span style="opacity:.6"> one-time</span>
+            </div>
+            <ul class="list-unstyled mb-4 flex-grow-1">
+              <li class="mb-2"><i class="bi bi-check-circle-fill text-info me-2"></i>Everything in Annual</li>
+              <li class="mb-2"><i class="bi bi-check-circle-fill text-info me-2"></i>Lifetime updates</li>
+              <li class="mb-2"><i class="bi bi-check-circle-fill text-info me-2"></i>Reseller eligibility</li>
+              <li class="mb-2"><i class="bi bi-check-circle-fill text-info me-2"></i>Dedicated support</li>
+            </ul>
+            <a href="/login" class="btn btn-info w-100 fw-semibold text-dark">Get Started</a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="text-center mt-5 text-muted small">
+      All plans include access to your personal dashboard. Prices are in INR and exclusive of GST.
+    </div>
+  </div>
+</section>
+
+{% endblock %}

@@ -44,16 +44,7 @@
 
 <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
   <i class="bi bi-funnel text-muted"></i>
-  <select id="filter-location" class="form-select form-select-sm w-auto">
-    <option value="">All Locations</option>
-  </select>
-  <select id="filter-job-title" class="form-select form-select-sm w-auto">
-    <option value="">All Job Titles</option>
-  </select>
-  <select id="filter-skill" class="form-select form-select-sm w-auto">
-    <option value="">All Skills</option>
-  </select>
-  {% if session.role == 'superadmin' %}
+  {% if session.role in ('superadmin', 'reseller') %}
   <select id="filter-uploader-role" class="form-select form-select-sm w-auto">
     <option value="">All Roles</option>
     <option value="reseller">Resellers</option>
@@ -61,6 +52,15 @@
     <option value="superadmin">Admin</option>
   </select>
   {% endif %}
+  <select id="filter-skill" class="form-select form-select-sm w-auto">
+    <option value="">All Skills</option>
+  </select>
+  <select id="filter-job-title" class="form-select form-select-sm w-auto">
+    <option value="">All Job Titles</option>
+  </select>
+  <select id="filter-location" class="form-select form-select-sm w-auto">
+    <option value="">All Locations</option>
+  </select>
   <button id="clear-filters-btn" class="btn btn-sm btn-outline-secondary d-none">
     <i class="bi bi-x-circle me-1"></i>Clear Filters
   </button>

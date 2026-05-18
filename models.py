@@ -12,6 +12,10 @@ if DATABASE_URL:
         role          TEXT NOT NULL DEFAULT 'customer'
                       CHECK (role IN ('superadmin', 'reseller', 'customer')),
         reseller_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        phone         TEXT,
+        membership_type TEXT,
+        amount_paid   REAL,
+        date_of_expiry TEXT,
         created_at    TIMESTAMP DEFAULT NOW()
     );
     """
@@ -53,6 +57,39 @@ if DATABASE_URL:
         extracted_at  TIMESTAMP DEFAULT NOW()
     );
     """
+    LEADS_TABLE = """
+    CREATE TABLE IF NOT EXISTS leads (
+        id         SERIAL PRIMARY KEY,
+        name       TEXT NOT NULL,
+        email      TEXT NOT NULL,
+        phone      TEXT,
+        profession TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+    );
+    """
+    PAYMENT_HISTORY_TABLE = """
+    CREATE TABLE IF NOT EXISTS payment_history (
+        id             SERIAL PRIMARY KEY,
+        user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        membership_type TEXT,
+        amount         REAL,
+        payment_date   TEXT,
+        notes          TEXT
+    );
+    """
+    SITE_SETTINGS_TABLE = """
+    CREATE TABLE IF NOT EXISTS site_settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT
+    );
+    """
+    PASSWORD_RESET_TOKENS_TABLE = """
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        token      TEXT PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        expires_at TEXT NOT NULL
+    );
+    """
 else:
     USERS_TABLE = """
     CREATE TABLE IF NOT EXISTS users (
@@ -63,6 +100,10 @@ else:
         role          TEXT NOT NULL DEFAULT 'customer'
                       CHECK (role IN ('superadmin', 'reseller', 'customer')),
         reseller_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        phone         TEXT,
+        membership_type TEXT,
+        amount_paid   REAL,
+        date_of_expiry TEXT,
         created_at    DATETIME DEFAULT (datetime('now', 'localtime'))
     );
     """
@@ -102,6 +143,39 @@ else:
         skills        TEXT,
         other_details TEXT,
         extracted_at  DATETIME DEFAULT (datetime('now', 'localtime'))
+    );
+    """
+    LEADS_TABLE = """
+    CREATE TABLE IF NOT EXISTS leads (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT NOT NULL,
+        email      TEXT NOT NULL,
+        phone      TEXT,
+        profession TEXT,
+        created_at DATETIME DEFAULT (datetime('now','localtime'))
+    );
+    """
+    PAYMENT_HISTORY_TABLE = """
+    CREATE TABLE IF NOT EXISTS payment_history (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        membership_type TEXT,
+        amount          REAL,
+        payment_date    TEXT,
+        notes           TEXT
+    );
+    """
+    SITE_SETTINGS_TABLE = """
+    CREATE TABLE IF NOT EXISTS site_settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT
+    );
+    """
+    PASSWORD_RESET_TOKENS_TABLE = """
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        token      TEXT PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        expires_at TEXT NOT NULL
     );
     """
 

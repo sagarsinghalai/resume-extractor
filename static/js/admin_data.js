@@ -1,10 +1,11 @@
-/* admin_data.js — superadmin role→project→contacts filter & export */
+/* admin_data.js — superadmin role → user → project → contacts cascade */
 
 // ── State ──────────────────────────────────────────────────────────────────
 
-let allContacts  = [];   // raw contacts for the selected project
-let allProjects  = [];   // projects for the selected role
-let selectedPID  = null; // currently selected project id
+let allContacts = [];   // raw contacts for the selected project
+let allProjects = [];   // full project list (fetched on role change)
+let allUsers    = [];   // users for the selected role
+let selectedPID = null; // currently selected project id
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -34,70 +35,109 @@ function roleBadge(role) {
 
 function populateSelect(id, values, placeholder) {
   const sel = document.getElementById(id);
+  if (!sel) return;
   const cur = sel.value;
   sel.innerHTML = `<option value="">${placeholder}</option>`
     + values.map(v => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(v)}</option>`).join('');
 }
 
-// ── Step 1 — Role filter ───────────────────────────────────────────────────
-
-document.getElementById('role-filter').addEventListener('change', async function () {
-  const role = this.value;
+function populateProjectDropdown(projects) {
   const projSel  = document.getElementById('project-filter');
   const projHint = document.getElementById('project-hint');
 
-  // Reset downstream
-  projSel.innerHTML = '<option value="">Loading projects…</option>';
+  if (!projects.length) {
+    projSel.innerHTML = '<option value="">No projects found</option>';
+    projSel.disabled  = true;
+    projHint.textContent = '';
+    return;
+  }
+
+  projSel.innerHTML = '<option value="">— Select a project —</option>'
+    + projects.map(p =>
+        `<option value="${p.id}">${esc(p.owner_username)} › ${esc(p.name)} (${p.contact_count ?? 0} contacts)</option>`
+      ).join('');
+  projSel.disabled  = false;
+  projHint.textContent = `${projects.length} project${projects.length !== 1 ? 's' : ''} found.`;
+}
+
+// ── Step 1 — Role ──────────────────────────────────────────────────────────
+
+document.getElementById('role-filter').addEventListener('change', async function () {
+  const role     = this.value;
+  const userSel  = document.getElementById('user-filter');
+  const userHint = document.getElementById('user-hint');
+  const projSel  = document.getElementById('project-filter');
+  const projHint = document.getElementById('project-hint');
+
+  // Reset all downstream
+  userSel.innerHTML = '<option value="">Loading…</option>';
+  userSel.disabled  = true;
+  projSel.innerHTML = '<option value="">— Select a project —</option>';
   projSel.disabled  = true;
+  projHint.textContent = '';
   hideResults();
 
+  // Fetch all projects for this role
   try {
     const params = role ? `?role=${encodeURIComponent(role)}` : '';
     const res    = await fetch('/api/admin/projects' + params);
     allProjects  = await res.json();
-
-    if (!allProjects.length) {
-      projSel.innerHTML = '<option value="">No projects found for this role</option>';
-      projHint.textContent = 'Create projects from the Projects page and upload resumes to them.';
-      return;
-    }
-
-    // Build grouped options: group by owner when "all roles" selected
-    const groupByOwner = !role;
-    let html = '<option value="">— Select a project —</option>';
-
-    if (groupByOwner) {
-      // Group by role then owner
-      const byRole = { reseller: [], customer: [] };
-      allProjects.forEach(p => { (byRole[p.owner_role] || byRole.customer).push(p); });
-
-      ['reseller', 'customer'].forEach(r => {
-        if (!byRole[r].length) return;
-        const label = r === 'reseller' ? 'Resellers' : 'Customers';
-        html += `<optgroup label="── ${label} ──">`;
-        byRole[r].forEach(p => {
-          html += `<option value="${p.id}">${esc(p.owner_username)} › ${esc(p.name)}`
-               +  ` (${p.contact_count} contacts)</option>`;
-        });
-        html += '</optgroup>';
-      });
-    } else {
-      allProjects.forEach(p => {
-        html += `<option value="${p.id}">${esc(p.owner_username)} › ${esc(p.name)}`
-             +  ` (${p.contact_count} contacts)</option>`;
-      });
-    }
-
-    projSel.innerHTML = html;
-    projSel.disabled  = false;
-    projHint.textContent = `${allProjects.length} project${allProjects.length !== 1 ? 's' : ''} found.`;
   } catch (e) {
-    projSel.innerHTML = '<option value="">Error loading projects</option>';
-    projHint.textContent = 'Could not load projects: ' + e.message;
+    allProjects = [];
   }
+
+  // Fetch users for this role (or build from project owners if "All Roles")
+  if (role) {
+    try {
+      const res = await fetch(`/api/admin/users-by-role?role=${encodeURIComponent(role)}`);
+      allUsers  = await res.json();
+    } catch (e) {
+      allUsers = [];
+    }
+  } else {
+    // Derive unique users from all projects
+    const map = {};
+    allProjects.forEach(p => {
+      if (p.owner_id && !map[p.owner_id]) {
+        map[p.owner_id] = { id: p.owner_id, username: p.owner_username, role: p.owner_role };
+      }
+    });
+    allUsers = Object.values(map).sort((a, b) => a.username.localeCompare(b.username));
+  }
+
+  if (!allUsers.length) {
+    userSel.innerHTML = `<option value="">No users found for this role</option>`;
+    userHint.textContent = '';
+    return;
+  }
+
+  const roleLabel = role || 'user';
+  userSel.innerHTML = `<option value="">— All ${roleLabel}s —</option>`
+    + allUsers.map(u =>
+        `<option value="${u.id}">${esc(u.username)}${roleBadge(u.role)}</option>`
+      ).join('');
+  userSel.disabled  = false;
+  userHint.textContent = `${allUsers.length} user${allUsers.length !== 1 ? 's' : ''} found.`;
+
+  // Populate projects for all users of this role (no specific user yet)
+  populateProjectDropdown(allProjects);
 });
 
-// ── Step 2 — Project filter ────────────────────────────────────────────────
+// ── Step 2 — User ──────────────────────────────────────────────────────────
+
+document.getElementById('user-filter').addEventListener('change', function () {
+  const userId  = this.value ? parseInt(this.value, 10) : null;
+  const filtered = userId
+    ? allProjects.filter(p => p.owner_id === userId)
+    : allProjects;
+
+  // Reset project selection and hide results
+  document.getElementById('project-filter').value = '';
+  hideResults();
+  populateProjectDropdown(filtered);
+});
+
+// ── Step 3 — Project ───────────────────────────────────────────────────────
 
 document.getElementById('project-filter').addEventListener('change', async function () {
   const pid = this.value;
@@ -106,9 +146,15 @@ document.getElementById('project-filter').addEventListener('change', async funct
   selectedPID = parseInt(pid, 10);
   const proj  = allProjects.find(p => p.id === selectedPID);
 
+  // Reset inner filters
+  document.getElementById('search-input').value     = '';
+  document.getElementById('filter-skill').value     = '';
+  document.getElementById('filter-job-title').value = '';
+  document.getElementById('filter-location').value  = '';
+  document.getElementById('clear-filters-btn').classList.add('d-none');
+
   showResultsSection(proj);
-  await loadContacts();
-  await loadFilterOptions();
+  await Promise.all([loadContacts(), loadFilterOptions()]);
 });
 
 // ── Load contacts ──────────────────────────────────────────────────────────
@@ -117,22 +163,22 @@ async function loadContacts() {
   if (!selectedPID) return;
 
   const search   = document.getElementById('search-input').value.trim();
-  const location = document.getElementById('filter-location').value;
-  const jobTitle = document.getElementById('filter-job-title').value;
   const skill    = document.getElementById('filter-skill').value;
+  const jobTitle = document.getElementById('filter-job-title').value;
+  const location = document.getElementById('filter-location').value;
 
   const params = new URLSearchParams();
   if (search)   params.set('search',    search);
-  if (location) params.set('location',  location);
-  if (jobTitle) params.set('job_title', jobTitle);
   if (skill)    params.set('skill',     skill);
+  if (jobTitle) params.set('job_title', jobTitle);
+  if (location) params.set('location',  location);
 
   document.getElementById('clear-filters-btn')
-    .classList.toggle('d-none', !(search || location || jobTitle || skill));
+    .classList.toggle('d-none', !(search || skill || jobTitle || location));
 
   try {
-    const res      = await fetch(`/api/projects/${selectedPID}/contacts?` + params.toString());
-    allContacts    = await res.json();
+    const res   = await fetch(`/api/projects/${selectedPID}/contacts?` + params.toString());
+    allContacts = await res.json();
     renderTable(allContacts);
   } catch (e) {
     document.getElementById('contacts-tbody').innerHTML =
@@ -140,16 +186,16 @@ async function loadContacts() {
   }
 }
 
-// ── Load filter options ────────────────────────────────────────────────────
+// ── Load filter options (Skills → Job Titles → Locations) ─────────────────
 
 async function loadFilterOptions() {
   if (!selectedPID) return;
   try {
     const res = await fetch(`/api/projects/${selectedPID}/filter-options`);
-    const { locations, job_titles, skills } = await res.json();
-    populateSelect('filter-location',  locations,  'All Locations');
-    populateSelect('filter-job-title', job_titles, 'All Job Titles');
+    const { skills, job_titles, locations } = await res.json();
     populateSelect('filter-skill',     skills,     'All Skills');
+    populateSelect('filter-job-title', job_titles, 'All Job Titles');
+    populateSelect('filter-location',  locations,  'All Locations');
   } catch { /* silently ignore */ }
 }
 
@@ -165,7 +211,7 @@ function renderTable(contacts) {
   if (!contacts.length) {
     tbody.innerHTML = `
       <tr><td colspan="11" class="text-center py-5 text-muted">
-        <i class="bi bi-inbox fs-3 d-block mb-2"></i>No contacts in this project.
+        <i class="bi bi-inbox fs-3 d-block mb-2"></i>No contacts match the current filters.
       </td></tr>`;
     footer.textContent = '';
     document.getElementById('export-btn').disabled = true;
@@ -231,7 +277,9 @@ document.getElementById('export-btn').addEventListener('click', async () => {
     const a    = document.createElement('a');
     a.href = url;
     const proj = allProjects.find(p => p.id === selectedPID);
-    a.download = proj ? `${proj.owner_username}_${proj.name}_contacts.xlsx` : `project_${selectedPID}_contacts.xlsx`;
+    a.download = proj
+      ? `${proj.owner_username}_${proj.name}_contacts.xlsx`
+      : `project_${selectedPID}_contacts.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
   } catch (e) {
@@ -242,7 +290,7 @@ document.getElementById('export-btn').addEventListener('click', async () => {
   }
 });
 
-// ── Search & Filters ───────────────────────────────────────────────────────
+// ── Search & inner filters ─────────────────────────────────────────────────
 
 let searchDebounce;
 document.getElementById('search-input').addEventListener('input', () => {
@@ -250,15 +298,15 @@ document.getElementById('search-input').addEventListener('input', () => {
   searchDebounce = setTimeout(loadContacts, 300);
 });
 
-['filter-location', 'filter-job-title', 'filter-skill'].forEach(id =>
+['filter-skill', 'filter-job-title', 'filter-location'].forEach(id =>
   document.getElementById(id).addEventListener('change', loadContacts)
 );
 
 document.getElementById('clear-filters-btn').addEventListener('click', () => {
   document.getElementById('search-input').value     = '';
-  document.getElementById('filter-location').value  = '';
-  document.getElementById('filter-job-title').value = '';
   document.getElementById('filter-skill').value     = '';
+  document.getElementById('filter-job-title').value = '';
+  document.getElementById('filter-location').value  = '';
   loadContacts();
 });
 
@@ -267,23 +315,16 @@ document.getElementById('clear-filters-btn').addEventListener('click', () => {
 function showResultsSection(proj) {
   document.getElementById('results-section').classList.remove('d-none');
   document.getElementById('export-btn').disabled = false;
+  document.getElementById('table-footer').textContent = '';
 
   const ownerBadge = proj
-    ? `<span class="badge ms-2 ${proj.owner_role === 'reseller' ? 'bg-warning text-dark' : 'bg-info text-dark'}"
+    ? `<span class="badge ms-2 ${proj.owner_role === 'reseller' ? 'bg-warning text-dark' : proj.owner_role === 'superadmin' ? 'bg-danger' : 'bg-info text-dark'}"
              style="font-size:0.7rem">${esc(proj.owner_role)}</span>`
     : '';
   document.getElementById('results-title').innerHTML = proj
     ? `<i class="bi bi-folder-fill text-warning me-2"></i>${esc(proj.name)}
        <span class="text-muted fw-normal fs-6 ms-2">by ${esc(proj.owner_username)}${ownerBadge}</span>`
     : '';
-
-  // Reset filters
-  document.getElementById('search-input').value     = '';
-  document.getElementById('filter-location').value  = '';
-  document.getElementById('filter-job-title').value = '';
-  document.getElementById('filter-skill').value     = '';
-  document.getElementById('clear-filters-btn').classList.add('d-none');
-  document.getElementById('table-footer').textContent = '';
 }
 
 function hideResults() {
@@ -292,5 +333,37 @@ function hideResults() {
   document.getElementById('export-btn').disabled = true;
 }
 
-// ── Init: trigger role dropdown to load all projects on page load ───────────
-document.getElementById('role-filter').dispatchEvent(new Event('change'));
+// ── Init: load all projects on page load ───────────────────────────────────
+
+(async function init() {
+  try {
+    const res   = await fetch('/api/admin/projects');
+    allProjects = await res.json();
+
+    // Derive all users from project owners
+    const map = {};
+    allProjects.forEach(p => {
+      if (p.owner_id && !map[p.owner_id]) {
+        map[p.owner_id] = { id: p.owner_id, username: p.owner_username, role: p.owner_role };
+      }
+    });
+    allUsers = Object.values(map).sort((a, b) => a.username.localeCompare(b.username));
+
+    const userSel  = document.getElementById('user-filter');
+    const userHint = document.getElementById('user-hint');
+    if (allUsers.length) {
+      userSel.innerHTML = `<option value="">— All Users —</option>`
+        + allUsers.map(u =>
+            `<option value="${u.id}">${esc(u.username)}${roleBadge(u.role)}</option>`
+          ).join('');
+      userSel.disabled = false;
+      userHint.textContent = `${allUsers.length} user${allUsers.length !== 1 ? 's' : ''} found.`;
+    } else {
+      userSel.innerHTML = '<option value="">No users found</option>';
+    }
+
+    populateProjectDropdown(allProjects);
+  } catch (e) {
+    console.warn('Admin data init error', e);
+  }
+})();

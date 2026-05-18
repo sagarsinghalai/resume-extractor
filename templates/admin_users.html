@@ -26,7 +26,11 @@
         <label class="form-label small fw-semibold">Email</label>
         <input type="email" name="email" class="form-control" placeholder="optional">
       </div>
-      <div class="col-12 col-md-2">
+      <div class="col-12 col-md-1">
+        <label class="form-label small fw-semibold">Phone</label>
+        <input type="text" name="phone" class="form-control" placeholder="optional">
+      </div>
+      <div class="col-12 col-md-1">
         <label class="form-label small fw-semibold">Role <span class="text-danger">*</span></label>
         <select name="role" id="create-role-select" class="form-select">
           <option value="customer">Customer</option>
@@ -34,8 +38,8 @@
           <option value="superadmin">Superadmin</option>
         </select>
       </div>
-      <div class="col-12 col-md-2" id="reseller-assign-col">
-        <label class="form-label small fw-semibold">Assign to Reseller</label>
+      <div class="col-12 col-md-1" id="reseller-assign-col">
+        <label class="form-label small fw-semibold">Reseller</label>
         <select name="reseller_id" class="form-select">
           <option value="">— None —</option>
           {% for r in resellers %}
@@ -43,18 +47,35 @@
           {% endfor %}
         </select>
       </div>
-      <div class="col-12 col-md-2">
-        <label class="form-label small fw-semibold">Password <span class="text-danger">*</span></label>
-        <input type="password" name="password" class="form-control" required placeholder="Set a password">
+      <div class="col-12 col-md-1">
+        <label class="form-label small fw-semibold">Membership</label>
+        <select name="membership_type" class="form-select">
+          <option value="">— None —</option>
+          <option value="monthly">Monthly</option>
+          <option value="annual">Annual</option>
+          <option value="lifetime">Lifetime</option>
+          <option value="reseller">Reseller</option>
+        </select>
       </div>
-      <div class="col-12 col-md-2">
+      <div class="col-12 col-md-1">
+        <label class="form-label small fw-semibold">Amount Paid</label>
+        <input type="number" step="0.01" name="amount_paid" class="form-control" placeholder="0.00">
+      </div>
+      <div class="col-12 col-md-1">
+        <label class="form-label small fw-semibold">Expiry Date</label>
+        <input type="date" name="date_of_expiry" class="form-control">
+      </div>
+      <div class="col-12 col-md-1">
+        <label class="form-label small fw-semibold">Password <span class="text-danger">*</span></label>
+        <input type="password" name="password" class="form-control" required placeholder="Password">
+      </div>
+      <div class="col-12 col-md-1">
         <button type="submit" class="btn btn-primary w-100">
           <i class="bi bi-plus-lg me-1"></i>Create
         </button>
       </div>
     </form>
     <script>
-      // Hide "Assign to Reseller" when role is not customer
       document.getElementById('create-role-select').addEventListener('change', function () {
         document.getElementById('reseller-assign-col').style.display =
           this.value === 'customer' ? '' : 'none';
@@ -74,11 +95,15 @@
             <th class="ps-3">#</th>
             <th>Username</th>
             <th>Email</th>
+            <th>Phone</th>
             <th>Role</th>
             <th>Reseller</th>
-            <th>Created</th>
+            <th>Membership</th>
+            <th>Amount Paid</th>
+            <th>Expiry Date</th>
+            <th>Registered</th>
             <th>Reset Password</th>
-            <th></th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -92,6 +117,7 @@
               {% endif %}
             </td>
             <td class="text-muted small">{{ u.email or '—' }}</td>
+            <td class="text-muted small">{{ u.phone or '—' }}</td>
             <td>
               {% if u.role == 'superadmin' %}
                 <span class="badge bg-danger">Superadmin</span>
@@ -105,7 +131,7 @@
               {% if u.role == 'customer' %}
                 <form method="POST" action="/admin/users/{{ u.id }}/assign-reseller"
                       class="d-flex gap-1 align-items-center">
-                  <select name="reseller_id" class="form-select form-select-sm" style="max-width:130px">
+                  <select name="reseller_id" class="form-select form-select-sm" style="max-width:120px">
                     <option value="">— None —</option>
                     {% for r in resellers %}
                       <option value="{{ r.id }}"
@@ -122,31 +148,155 @@
                 <span class="text-muted small">—</span>
               {% endif %}
             </td>
+            <td class="small">
+              {% if u.membership_type %}
+                <span class="badge bg-secondary">{{ u.membership_type }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="small text-muted">
+              {% if u.amount_paid is not none and u.amount_paid != '' %}
+                ₹{{ "%.0f"|format(u.amount_paid) }}
+              {% else %}—{% endif %}
+            </td>
+            <td class="small text-muted">{{ u.date_of_expiry or '—' }}</td>
             <td class="text-muted small">{{ (u.created_at or '—')[:16] }}</td>
             <td>
               <form method="POST" action="/admin/users/{{ u.id }}/change-password"
                     class="d-flex gap-2 align-items-center">
                 <input type="password" name="new_password" class="form-control form-control-sm"
-                       placeholder="New password" style="max-width:160px" required>
+                       placeholder="New password" style="max-width:130px" required>
                 <button type="submit" class="btn btn-sm btn-outline-secondary" title="Update password">
                   <i class="bi bi-key"></i>
                 </button>
               </form>
             </td>
             <td>
-              {% if u.id != session.user_id %}
-                <form method="POST" action="/admin/users/{{ u.id }}/delete"
-                      onsubmit="return confirm('Delete user {{ u.username }}? This cannot be undone.')">
-                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete user">
-                    <i class="bi bi-trash3"></i>
-                  </button>
-                </form>
-              {% endif %}
+              <div class="d-flex gap-1 flex-nowrap">
+                <!-- Edit profile button -->
+                <button type="button" class="btn btn-sm btn-outline-primary"
+                        title="Edit profile"
+                        data-bs-toggle="modal"
+                        data-bs-target="#editModal{{ u.id }}">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                {% if u.id != session.user_id %}
+                  <form method="POST" action="/admin/users/{{ u.id }}/delete"
+                        onsubmit="return confirm('Delete user {{ u.username }}? This cannot be undone.')">
+                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete user">
+                      <i class="bi bi-trash3"></i>
+                    </button>
+                  </form>
+                {% endif %}
+              </div>
             </td>
           </tr>
+
+          <!-- Edit Profile Modal -->
+          <div class="modal fade" id="editModal{{ u.id }}" tabindex="-1">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h5 class="modal-title">
+                    <i class="bi bi-person-gear me-2"></i>Edit: {{ u.username }}
+                  </h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+
+                  <!-- Profile form -->
+                  <form method="POST" action="/admin/users/{{ u.id }}/update-profile">
+                    <div class="row g-3 mb-3">
+                      <div class="col-md-3">
+                        <label class="form-label small fw-semibold">Phone</label>
+                        <input type="text" name="phone" class="form-control"
+                               value="{{ u.phone or '' }}" placeholder="+91 ...">
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label small fw-semibold">Membership Type</label>
+                        <select name="membership_type" class="form-select">
+                          <option value="">— None —</option>
+                          <option value="monthly" {% if u.membership_type == 'monthly' %}selected{% endif %}>Monthly</option>
+                          <option value="annual"  {% if u.membership_type == 'annual'  %}selected{% endif %}>Annual</option>
+                          <option value="lifetime"{% if u.membership_type == 'lifetime'%}selected{% endif %}>Lifetime</option>
+                          <option value="reseller"{% if u.membership_type == 'reseller'%}selected{% endif %}>Reseller</option>
+                        </select>
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label small fw-semibold">Amount Paid (₹)</label>
+                        <input type="number" step="0.01" name="amount_paid" class="form-control"
+                               value="{{ u.amount_paid if u.amount_paid is not none else '' }}">
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label small fw-semibold">Expiry Date</label>
+                        <input type="date" name="date_of_expiry" class="form-control"
+                               value="{{ u.date_of_expiry or '' }}">
+                      </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm">
+                      <i class="bi bi-floppy me-1"></i>Save Profile
+                    </button>
+                  </form>
+
+                  <hr class="my-4">
+
+                  <!-- Payment History -->
+                  <h6 class="fw-semibold mb-3">
+                    <i class="bi bi-receipt me-1"></i>Payment History
+                  </h6>
+                  <div id="payment-history-{{ u.id }}">
+                    <div class="text-muted small">Loading...</div>
+                  </div>
+
+                  <hr class="my-3">
+
+                  <!-- Add Payment -->
+                  <h6 class="fw-semibold mb-3">
+                    <i class="bi bi-plus-circle me-1"></i>Add Payment Record
+                  </h6>
+                  <form method="POST" action="/admin/users/{{ u.id }}/add-payment"
+                        class="row g-2 align-items-end">
+                    <div class="col-md-3">
+                      <label class="form-label small fw-semibold">Membership Type</label>
+                      <select name="membership_type" class="form-select form-select-sm">
+                        <option value="">— Select —</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="annual">Annual</option>
+                        <option value="lifetime">Lifetime</option>
+                        <option value="reseller">Reseller</option>
+                      </select>
+                    </div>
+                    <div class="col-md-2">
+                      <label class="form-label small fw-semibold">Amount (₹)</label>
+                      <input type="number" step="0.01" name="amount" class="form-control form-control-sm"
+                             placeholder="500.00">
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label small fw-semibold">Payment Date</label>
+                      <input type="date" name="payment_date" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label small fw-semibold">Notes</label>
+                      <input type="text" name="notes" class="form-control form-control-sm"
+                             placeholder="e.g. Razorpay txn id">
+                    </div>
+                    <div class="col-md-1">
+                      <button type="submit" class="btn btn-success btn-sm w-100">
+                        <i class="bi bi-plus-lg"></i>
+                      </button>
+                    </div>
+                  </form>
+
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {% else %}
           <tr>
-            <td colspan="8" class="text-center py-4 text-muted">No users found.</td>
+            <td colspan="12" class="text-center py-4 text-muted">No users found.</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -155,4 +305,52 @@
   </div>
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Load payment history when a modal is shown
+document.querySelectorAll('[data-bs-toggle="modal"]').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    const target = btn.getAttribute('data-bs-target'); // e.g. #editModal123
+    const userId = target.replace('#editModal', '');
+    const container = document.getElementById('payment-history-' + userId);
+    if (!container) return;
+
+    fetch('/api/admin/users/' + userId + '/payment-history')
+      .then(r => r.json())
+      .then(data => {
+        if (!data.length) {
+          container.innerHTML = '<p class="text-muted small">No payment records yet.</p>';
+          return;
+        }
+        container.innerHTML = `
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Membership</th>
+                  <th>Amount</th>
+                  <th>Date</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${data.map(p => `
+                  <tr>
+                    <td>${p.membership_type || '—'}</td>
+                    <td>${p.amount != null ? '₹' + p.amount : '—'}</td>
+                    <td>${p.payment_date || '—'}</td>
+                    <td class="text-muted small">${p.notes || '—'}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`;
+      })
+      .catch(() => {
+        container.innerHTML = '<p class="text-danger small">Failed to load payment history.</p>';
+      });
+  });
+});
+</script>
 {% endblock %}

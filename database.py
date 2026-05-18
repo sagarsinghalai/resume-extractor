@@ -75,17 +75,29 @@ def init_db():
     cur.execute(models.PROJECTS_TABLE)
     cur.execute(models.RESUMES_TABLE)
     cur.execute(models.CONTACTS_TABLE)
+    cur.execute(models.LEADS_TABLE)
+    cur.execute(models.PAYMENT_HISTORY_TABLE)
+    cur.execute(models.SITE_SETTINGS_TABLE)
+    cur.execute(models.PASSWORD_RESET_TOKENS_TABLE)
 
     # Migrations: add columns that may not exist on older databases
     if DATABASE_URL:
         cur.execute("ALTER TABLE resumes ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);")
         cur.execute("ALTER TABLE resumes ADD COLUMN IF NOT EXISTS project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS reseller_id INTEGER REFERENCES users(id) ON DELETE SET NULL;")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS membership_type TEXT;")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS amount_paid REAL;")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS date_of_expiry TEXT;")
     else:
         for col_sql in [
             "ALTER TABLE resumes ADD COLUMN user_id INTEGER REFERENCES users(id);",
             "ALTER TABLE resumes ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL;",
             "ALTER TABLE users ADD COLUMN reseller_id INTEGER REFERENCES users(id) ON DELETE SET NULL;",
+            "ALTER TABLE users ADD COLUMN phone TEXT;",
+            "ALTER TABLE users ADD COLUMN membership_type TEXT;",
+            "ALTER TABLE users ADD COLUMN amount_paid REAL;",
+            "ALTER TABLE users ADD COLUMN date_of_expiry TEXT;",
         ]:
             try:
                 cur.execute(col_sql)
@@ -99,9 +111,27 @@ def init_db():
             pass
 
     conn.commit()
+
+    # Seed site settings defaults
+    _seed_site_settings(conn)
     _seed_superadmin(conn)
     conn.close()
     print("Database initialized.")
+
+
+def _seed_site_settings(conn):
+    cur = conn.cursor()
+    for key, default_val in [
+        ("hubspot_form_code", ""),
+        ("contact_us_content", "<p>Contact us at support@example.com</p>"),
+    ]:
+        cur.execute(f"SELECT key FROM site_settings WHERE key={P}", (key,))
+        if _row(cur) is None:
+            cur.execute(
+                f"INSERT INTO site_settings (key, value) VALUES ({P},{P})",
+                (key, default_val),
+            )
+    conn.commit()
 
 
 def _seed_superadmin(conn):
@@ -119,21 +149,34 @@ def _seed_superadmin(conn):
 
 # ── User CRUD ─────────────────────────────────────────────────────────────────
 
-def create_user(username: str, email: str, password: str, role: str, reseller_id: int = None):
+def create_user(username: str, email: str, password: str, role: str,
+                reseller_id: int = None, phone: str = None,
+                membership_type: str = None, amount_paid: float = None,
+                date_of_expiry: str = None):
     from werkzeug.security import generate_password_hash
     conn = get_conn()
     cur = conn.cursor()
     try:
         if DATABASE_URL:
             cur.execute(
-                f"INSERT INTO users (username, email, password_hash, role, reseller_id) VALUES ({P},{P},{P},{P},{P}) RETURNING id",
-                (username, email or None, generate_password_hash(password), role, reseller_id),
+                f"""INSERT INTO users
+                    (username, email, password_hash, role, reseller_id,
+                     phone, membership_type, amount_paid, date_of_expiry)
+                    VALUES ({P},{P},{P},{P},{P},{P},{P},{P},{P}) RETURNING id""",
+                (username, email or None, generate_password_hash(password), role,
+                 reseller_id, phone or None, membership_type or None,
+                 amount_paid, date_of_expiry or None),
             )
             new_id = cur.fetchone()[0]
         else:
             cur.execute(
-                f"INSERT INTO users (username, email, password_hash, role, reseller_id) VALUES ({P},{P},{P},{P},{P})",
-                (username, email or None, generate_password_hash(password), role, reseller_id),
+                f"""INSERT INTO users
+                    (username, email, password_hash, role, reseller_id,
+                     phone, membership_type, amount_paid, date_of_expiry)
+                    VALUES ({P},{P},{P},{P},{P},{P},{P},{P},{P})""",
+                (username, email or None, generate_password_hash(password), role,
+                 reseller_id, phone or None, membership_type or None,
+                 amount_paid, date_of_expiry or None),
             )
             new_id = cur.lastrowid
         conn.commit()
@@ -182,6 +225,18 @@ def get_user_by_username(username: str):
     return result
 
 
+def get_user_by_email(email: str):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        f"SELECT id, username, email, role FROM users WHERE email={P}",
+        (email,),
+    )
+    result = _row(cur)
+    conn.close()
+    return result
+
+
 def get_user_by_id(user_id: int):
     conn = get_conn()
     cur = conn.cursor()
@@ -199,6 +254,7 @@ def get_all_users() -> list:
     cur = conn.cursor()
     cur.execute(
         """SELECT u.id, u.username, u.email, u.role, u.reseller_id, u.created_at,
+                  u.phone, u.membership_type, u.amount_paid, u.date_of_expiry,
                   r.username AS reseller_username
            FROM users u
            LEFT JOIN users r ON u.reseller_id = r.id
@@ -227,6 +283,139 @@ def update_user_password(user_id: int, new_password: str):
     cur.execute(
         f"UPDATE users SET password_hash={P} WHERE id={P}",
         (generate_password_hash(new_password), user_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def update_user_profile(user_id: int, phone: str, membership_type: str,
+                        amount_paid, date_of_expiry: str):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        f"""UPDATE users
+            SET phone={P}, membership_type={P}, amount_paid={P}, date_of_expiry={P}
+            WHERE id={P}""",
+        (phone or None, membership_type or None,
+         float(amount_paid) if amount_paid not in (None, '') else None,
+         date_of_expiry or None, user_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+# ── Leads ─────────────────────────────────────────────────────────────────────
+
+def save_lead(name: str, email: str, phone: str, profession: str):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        f"INSERT INTO leads (name, email, phone, profession) VALUES ({P},{P},{P},{P})",
+        (name, email, phone or None, profession or None),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_all_leads() -> list:
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT id, name, email, phone, profession, created_at FROM leads ORDER BY created_at DESC")
+    rows = _rows(cur)
+    conn.close()
+    for r in rows:
+        if r.get("created_at") and not isinstance(r["created_at"], str):
+            r["created_at"] = str(r["created_at"])
+    return rows
+
+
+# ── Site Settings ─────────────────────────────────────────────────────────────
+
+def get_site_setting(key: str) -> str:
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(f"SELECT value FROM site_settings WHERE key={P}", (key,))
+    row = _row(cur)
+    conn.close()
+    return row["value"] if row else ""
+
+
+def set_site_setting(key: str, value: str):
+    conn = get_conn()
+    cur = conn.cursor()
+    if DATABASE_URL:
+        cur.execute(
+            f"INSERT INTO site_settings (key, value) VALUES ({P},{P}) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",
+            (key, value),
+        )
+    else:
+        cur.execute(
+            f"INSERT OR REPLACE INTO site_settings (key, value) VALUES ({P},{P})",
+            (key, value),
+        )
+    conn.commit()
+    conn.close()
+
+
+# ── Password Reset Tokens ─────────────────────────────────────────────────────
+
+def create_reset_token(user_id: int, token: str, expires_at: str):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        f"INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES ({P},{P},{P})",
+        (token, user_id, expires_at),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_reset_token(token: str):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        f"SELECT token, user_id, expires_at FROM password_reset_tokens WHERE token={P}",
+        (token,),
+    )
+    result = _row(cur)
+    conn.close()
+    return result
+
+
+def delete_reset_token(token: str):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(f"DELETE FROM password_reset_tokens WHERE token={P}", (token,))
+    conn.commit()
+    conn.close()
+
+
+# ── Payment History ───────────────────────────────────────────────────────────
+
+def get_all_payment_history(user_id: int) -> list:
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        f"""SELECT id, user_id, membership_type, amount, payment_date, notes
+            FROM payment_history WHERE user_id={P} ORDER BY id DESC""",
+        (user_id,),
+    )
+    rows = _rows(cur)
+    conn.close()
+    return rows
+
+
+def add_payment_history(user_id: int, membership_type: str, amount,
+                        payment_date: str, notes: str):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        f"""INSERT INTO payment_history
+            (user_id, membership_type, amount, payment_date, notes)
+            VALUES ({P},{P},{P},{P},{P})""",
+        (user_id, membership_type or None,
+         float(amount) if amount not in (None, '') else None,
+         payment_date or None, notes or None),
     )
     conn.commit()
     conn.close()
@@ -468,9 +657,17 @@ def get_filter_options(user_id: int = None, role: str = None) -> dict:
             if s:
                 skills_set.add(s.strip())
 
-    # Projects scoped to this user/role
+    # Projects scoped to this user/role (include owner_id/role for client-side cascade)
     projects_raw = get_all_projects(user_id, role)
-    projects = [{"id": p["id"], "name": p["name"]} for p in projects_raw]
+    projects = [
+        {
+            "id":         p["id"],
+            "name":       p["name"],
+            "owner_id":   p.get("owner_id"),
+            "owner_role": p.get("owner_role"),
+        }
+        for p in projects_raw
+    ]
 
     # Uploader roles (superadmin only)
     uploader_roles = []
@@ -524,6 +721,19 @@ def create_project(name: str, description: str, user_id: int):
         conn.close()
 
 
+def get_users_by_role(role: str) -> list:
+    """Return all users with a given role (id, username, role)."""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        f"SELECT id, username, role FROM users WHERE role={P} ORDER BY username ASC",
+        (role,),
+    )
+    rows = _rows(cur)
+    conn.close()
+    return rows
+
+
 def get_all_projects(user_id: int = None, role: str = None) -> list:
     conn = get_conn()
     cur = conn.cursor()
@@ -531,6 +741,7 @@ def get_all_projects(user_id: int = None, role: str = None) -> list:
     if role == "superadmin":
         cur.execute(
             """SELECT p.id, p.name, p.description, p.created_at,
+                      p.user_id      AS owner_id,
                       u.username AS owner_username,
                       u.role     AS owner_role,
                       COUNT(DISTINCT r.id)  AS resume_count,
@@ -539,13 +750,14 @@ def get_all_projects(user_id: int = None, role: str = None) -> list:
                LEFT JOIN users u    ON p.user_id    = u.id
                LEFT JOIN resumes r  ON r.project_id = p.id
                LEFT JOIN contacts c ON c.resume_id  = r.id
-               GROUP BY p.id, p.name, p.description, p.created_at, u.username, u.role
+               GROUP BY p.id, p.name, p.description, p.created_at, p.user_id, u.username, u.role
                ORDER BY p.created_at DESC"""
         )
     elif role == "reseller":
         # Own projects + customers' projects
         cur.execute(
             f"""SELECT p.id, p.name, p.description, p.created_at,
+                       p.user_id      AS owner_id,
                        u.username AS owner_username,
                        u.role     AS owner_role,
                        COUNT(DISTINCT r.id)  AS resume_count,
@@ -556,7 +768,7 @@ def get_all_projects(user_id: int = None, role: str = None) -> list:
                 LEFT JOIN contacts c ON c.resume_id  = r.id
                 WHERE p.user_id = {P}
                    OR p.user_id IN (SELECT id FROM users WHERE reseller_id = {P})
-                GROUP BY p.id, p.name, p.description, p.created_at, u.username, u.role
+                GROUP BY p.id, p.name, p.description, p.created_at, p.user_id, u.username, u.role
                 ORDER BY p.created_at DESC""",
             (user_id, user_id),
         )

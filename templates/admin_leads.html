@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Leads — Resume Extractor{% endblock %}
+
+{% block content %}
+
+<div class="d-flex align-items-center mb-4">
+  <h4 class="fw-bold mb-0">
+    <i class="bi bi-person-lines-fill me-2 text-primary"></i>Landing Page Leads
+  </h4>
+  <span class="ms-auto badge bg-secondary fs-6">{{ leads|length }} lead{{ 's' if leads|length != 1 else '' }}</span>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th class="ps-3">#</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Profession</th>
+            <th>Submitted</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for lead in leads %}
+          <tr>
+            <td class="ps-3 text-muted small">{{ loop.index }}</td>
+            <td class="fw-semibold">{{ lead.name }}</td>
+            <td><a href="mailto:{{ lead.email }}">{{ lead.email }}</a></td>
+            <td class="text-muted small">{{ lead.phone or '—' }}</td>
+            <td class="text-muted small">{{ lead.profession or '—' }}</td>
+            <td class="text-muted small">{{ (lead.created_at or '—')[:16] }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" class="text-center py-4 text-muted">No leads yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

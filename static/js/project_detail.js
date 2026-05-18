@@ -30,20 +30,6 @@ function roleBadge(role) {
   return '<span class="badge bg-info text-dark ms-1" style="font-size:0.65rem">customer</span>';
 }
 
-// ── Filter Options ─────────────────────────────────────────────────────────
-
-async function fetchFilterOptions() {
-  try {
-    const res = await fetch(`/api/projects/${PID}/filter-options`);
-    const { locations, job_titles, skills, uploader_roles } = await res.json();
-    populateSelect('filter-location',  locations,  'All Locations');
-    populateSelect('filter-job-title', job_titles, 'All Job Titles');
-    populateSelect('filter-skill',     skills,     'All Skills');
-
-    // Role dropdown is static HTML — no JS re-render needed
-  } catch (e) { console.warn('Filter options error', e); }
-}
-
 function populateSelect(id, values, placeholder) {
   const sel = document.getElementById(id);
   if (!sel) return;
@@ -52,23 +38,36 @@ function populateSelect(id, values, placeholder) {
     + values.map(v => `<option value="${esc(v)}"${v === current ? ' selected' : ''}>${esc(v)}</option>`).join('');
 }
 
+// ── Filter Options ─────────────────────────────────────────────────────────
+
+async function fetchFilterOptions() {
+  try {
+    const res = await fetch(`/api/projects/${PID}/filter-options`);
+    const { locations, job_titles, skills } = await res.json();
+    populateSelect('filter-skill',     skills,     'All Skills');
+    populateSelect('filter-job-title', job_titles, 'All Job Titles');
+    populateSelect('filter-location',  locations,  'All Locations');
+    // Role dropdown is static HTML — no JS re-render needed
+  } catch (e) { console.warn('Filter options error', e); }
+}
+
 // ── Contacts Table ─────────────────────────────────────────────────────────
 
 async function fetchContacts() {
   const search       = document.getElementById('search-input').value.trim();
-  const location     = document.getElementById('filter-location').value;
-  const jobTitle     = document.getElementById('filter-job-title').value;
-  const skill        = document.getElementById('filter-skill').value;
   const uploaderRole = document.getElementById('filter-uploader-role')?.value || '';
+  const skill        = document.getElementById('filter-skill').value;
+  const jobTitle     = document.getElementById('filter-job-title').value;
+  const location     = document.getElementById('filter-location').value;
 
   const params = new URLSearchParams();
   if (search)       params.set('search',       search);
-  if (location)     params.set('location',      location);
-  if (jobTitle)     params.set('job_title',     jobTitle);
-  if (skill)        params.set('skill',         skill);
   if (uploaderRole) params.set('uploader_role', uploaderRole);
+  if (skill)        params.set('skill',         skill);
+  if (jobTitle)     params.set('job_title',     jobTitle);
+  if (location)     params.set('location',      location);
 
-  const anyActive = !!(search || location || jobTitle || skill || uploaderRole);
+  const anyActive = !!(search || uploaderRole || skill || jobTitle || location);
   document.getElementById('clear-filters-btn').classList.toggle('d-none', !anyActive);
 
   try {
@@ -184,26 +183,51 @@ document.getElementById('export-btn').addEventListener('click', async () => {
   }
 });
 
-// ── Search & Filters ───────────────────────────────────────────────────────
+// ── Cascade Event Listeners ────────────────────────────────────────────────
 
+// Search — no cascade
 let searchDebounce;
 document.getElementById('search-input').addEventListener('input', () => {
   clearTimeout(searchDebounce);
   searchDebounce = setTimeout(fetchContacts, 300);
 });
 
-['filter-location', 'filter-job-title', 'filter-skill', 'filter-uploader-role'].forEach(id => {
-  const el = document.getElementById(id);
-  if (el) el.addEventListener('change', fetchContacts);
+// Role (superadmin/reseller) → resets Skills / Job Titles / Locations
+const roleEl = document.getElementById('filter-uploader-role');
+if (roleEl) {
+  roleEl.addEventListener('change', async () => {
+    document.getElementById('filter-skill').value     = '';
+    document.getElementById('filter-job-title').value = '';
+    document.getElementById('filter-location').value  = '';
+    await fetchFilterOptions();
+    fetchContacts();
+  });
+}
+
+// Skill → resets Job Title and Location
+document.getElementById('filter-skill').addEventListener('change', () => {
+  document.getElementById('filter-job-title').value = '';
+  document.getElementById('filter-location').value  = '';
+  fetchContacts();
 });
 
-document.getElementById('clear-filters-btn').addEventListener('click', () => {
+// Job Title → resets Location
+document.getElementById('filter-job-title').addEventListener('change', () => {
+  document.getElementById('filter-location').value = '';
+  fetchContacts();
+});
+
+// Location — terminal filter, just fetch
+document.getElementById('filter-location').addEventListener('change', fetchContacts);
+
+// Clear all filters
+document.getElementById('clear-filters-btn').addEventListener('click', async () => {
   document.getElementById('search-input').value     = '';
-  document.getElementById('filter-location').value  = '';
-  document.getElementById('filter-job-title').value = '';
-  document.getElementById('filter-skill').value     = '';
-  const roleEl = document.getElementById('filter-uploader-role');
   if (roleEl) roleEl.value = '';
+  document.getElementById('filter-skill').value     = '';
+  document.getElementById('filter-job-title').value = '';
+  document.getElementById('filter-location').value  = '';
+  await fetchFilterOptions();
   fetchContacts();
 });
 

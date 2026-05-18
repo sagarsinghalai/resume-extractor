@@ -13,14 +13,14 @@
 <nav class="navbar navbar-expand-lg navbar-dark shadow-sm"
      style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);">
   <div class="container-fluid px-4">
-    <a class="navbar-brand fw-bold fs-5" href="/">
+    <a class="navbar-brand fw-bold fs-5" href="/dashboard">
       <i class="bi bi-file-person-fill me-2 text-info"></i>Resume Extractor
     </a>
 
     <div class="navbar-nav ms-auto flex-row align-items-center gap-1">
       {% if session.user_id %}
         <a class="nav-link text-white px-3 py-2 rounded
-                  {% if request.path == '/' %}bg-white bg-opacity-10{% endif %}" href="/">
+                  {% if request.path == '/dashboard' %}bg-white bg-opacity-10{% endif %}" href="/dashboard">
           <i class="bi bi-grid-3x3-gap me-1"></i>Dashboard
         </a>
         <a class="nav-link text-white px-3 py-2 rounded
@@ -41,6 +41,16 @@
                     {% if request.path == '/admin/data' %}bg-white bg-opacity-10{% endif %}"
              href="/admin/data">
             <i class="bi bi-funnel-fill me-1"></i>Data Export
+          </a>
+          <a class="nav-link text-white px-3 py-2 rounded
+                    {% if request.path == '/admin/leads' %}bg-white bg-opacity-10{% endif %}"
+             href="/admin/leads">
+            <i class="bi bi-person-lines-fill me-1"></i>Leads
+          </a>
+          <a class="nav-link text-white px-3 py-2 rounded
+                    {% if request.path == '/admin/site-settings' %}bg-white bg-opacity-10{% endif %}"
+             href="/admin/site-settings">
+            <i class="bi bi-gear-fill me-1"></i>Site Settings
           </a>
         {% endif %}
 

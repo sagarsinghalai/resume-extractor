@@ -1,0 +1,201 @@
+{% extends "base_public.html" %}
+{% block title %}Resume Extractor — Extract Contact Data from Resumes Instantly{% endblock %}
+
+{% block content %}
+
+<!-- Hero Section -->
+<section class="py-5" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);">
+  <div class="container py-3">
+    <div class="row align-items-center g-5">
+
+      <!-- Left: headline + CTAs -->
+      <div class="col-lg-6 text-white">
+        <h1 class="display-5 fw-bold lh-sm mb-3">
+          Extract Contact Data from Resumes <span class="text-info">Instantly</span>
+        </h1>
+        <p class="lead text-white-75 mb-4" style="opacity:.85">
+          Upload PDFs and get structured contact data — names, emails, phones, skills — in seconds.
+          Perfect for HR teams, recruiters, and staffing agencies.
+        </p>
+        <div class="d-flex flex-wrap gap-3">
+          <a href="/login" class="btn btn-info btn-lg fw-semibold px-4">
+            <i class="bi bi-rocket-takeoff me-2"></i>Get Started Free
+          </a>
+          <a href="/pricing" class="btn btn-outline-light btn-lg px-4">
+            <i class="bi bi-tag me-2"></i>View Pricing
+          </a>
+        </div>
+      </div>
+
+      <!-- Right: lead gen form -->
+      <div class="col-lg-5 offset-lg-1">
+        <div class="card border-0 shadow-lg">
+          <div class="card-body p-4">
+            <h5 class="fw-bold mb-1">Get Early Access</h5>
+            <p class="text-muted small mb-3">Fill out the form and we'll be in touch.</p>
+
+            <div id="lead-success" class="alert alert-success d-none">
+              <i class="bi bi-check-circle me-2"></i>Thanks! We'll reach out soon.
+            </div>
+
+            <form id="lead-form">
+              <div class="mb-3">
+                <label class="form-label small fw-semibold">Name <span class="text-danger">*</span></label>
+                <input type="text" name="name" class="form-control" placeholder="Your full name" required>
+              </div>
+              <div class="mb-3">
+                <label class="form-label small fw-semibold">Email <span class="text-danger">*</span></label>
+                <input type="email" name="email" class="form-control" placeholder="you@company.com" required>
+              </div>
+              <div class="mb-3">
+                <label class="form-label small fw-semibold">Phone</label>
+                <input type="tel" name="phone" class="form-control" placeholder="+91 98765 43210">
+              </div>
+              <div class="mb-4">
+                <label class="form-label small fw-semibold">Profession / Role</label>
+                <input type="text" name="profession" class="form-control" placeholder="e.g. HR Manager, Recruiter">
+              </div>
+              <button type="submit" class="btn btn-primary w-100 fw-semibold" id="lead-submit-btn">
+                <i class="bi bi-send me-2"></i>Request Access
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Features Section -->
+<section class="py-5">
+  <div class="container">
+    <h2 class="text-center fw-bold mb-2">Who is this for?</h2>
+    <p class="text-center text-muted mb-5">Resume Extractor is built for professionals who deal with high volumes of resumes.</p>
+    <div class="row g-4">
+      <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100 text-center p-3">
+          <div class="card-body">
+            <div class="mb-3">
+              <span class="display-5">👔</span>
+            </div>
+            <h5 class="fw-bold">HR Professionals</h5>
+            <p class="text-muted">
+              Stop manually copying data from resumes. Upload in bulk and get a clean, exportable
+              spreadsheet of all candidate contact details in seconds.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100 text-center p-3">
+          <div class="card-body">
+            <div class="mb-3">
+              <span class="display-5">🎯</span>
+            </div>
+            <h5 class="fw-bold">Recruiters &amp; Staffing Agencies</h5>
+            <p class="text-muted">
+              Manage multiple client projects, assign resumes per campaign, and export
+              structured contact data instantly for faster outreach.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100 text-center p-3">
+          <div class="card-body">
+            <div class="mb-3">
+              <span class="display-5">🏢</span>
+            </div>
+            <h5 class="fw-bold">Business Owners</h5>
+            <p class="text-muted">
+              Hire smarter. Extract key skills, job titles, and contact info from every resume
+              without spending hours on manual data entry.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- How It Works -->
+<section class="py-5 bg-white">
+  <div class="container">
+    <h2 class="text-center fw-bold mb-2">How it works</h2>
+    <p class="text-center text-muted mb-5">Three simple steps to extract all your resume data.</p>
+    <div class="row g-4 text-center">
+      <div class="col-md-4">
+        <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center mb-3"
+             style="width:56px;height:56px;font-size:1.4rem;font-weight:700">1</div>
+        <h5 class="fw-bold">Upload PDF Resumes</h5>
+        <p class="text-muted">Drag and drop one or hundreds of PDF resumes. No size limit. All uploaded securely.</p>
+      </div>
+      <div class="col-md-4">
+        <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center mb-3"
+             style="width:56px;height:56px;font-size:1.4rem;font-weight:700">2</div>
+        <h5 class="fw-bold">AI Extracts Contact Data</h5>
+        <p class="text-muted">Our AI reads every resume and pulls out name, email, phone, skills, job title, company, and more.</p>
+      </div>
+      <div class="col-md-4">
+        <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center mb-3"
+             style="width:56px;height:56px;font-size:1.4rem;font-weight:700">3</div>
+        <h5 class="fw-bold">Export to Excel</h5>
+        <p class="text-muted">Download a beautifully formatted Excel file with all extracted contacts — ready for your workflow.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Pricing Teaser -->
+<section class="py-4 bg-primary text-white text-center">
+  <div class="container">
+    <h4 class="fw-bold mb-2">Plans starting at just ₹500/month</h4>
+    <p class="mb-3 opacity-75">No setup fees. Cancel anytime. Lifetime plan available.</p>
+    <a href="/pricing" class="btn btn-light fw-semibold px-4">
+      See All Plans <i class="bi bi-arrow-right ms-1"></i>
+    </a>
+  </div>
+</section>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('lead-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn = document.getElementById('lead-submit-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Submitting...';
+
+  const formData = new FormData(this);
+  const payload = {
+    name:       formData.get('name'),
+    email:      formData.get('email'),
+    phone:      formData.get('phone'),
+    profession: formData.get('profession'),
+  };
+
+  try {
+    const res = await fetch('/api/leads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      document.getElementById('lead-form').classList.add('d-none');
+      document.getElementById('lead-success').classList.remove('d-none');
+    } else {
+      const data = await res.json();
+      alert(data.error || 'Submission failed. Please try again.');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-send me-2"></i>Request Access';
+    }
+  } catch (err) {
+    alert('Network error. Please try again.');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-send me-2"></i>Request Access';
+  }
+});
+</script>
+{% endblock %}
