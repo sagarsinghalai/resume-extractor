@@ -67,27 +67,41 @@
     </div>
   </div>
 
-  <!-- Razorpay Webhook -->
+  <!-- Razorpay API + Webhook -->
   <div class="card border-0 shadow-sm mb-4">
     <div class="card-header border-0 py-3 px-4 fw-semibold text-white"
          style="background: linear-gradient(135deg,#0f3460,#1a73e8)">
-      <i class="bi bi-shield-check me-2"></i>Razorpay Webhook Secret
+      <i class="bi bi-shield-check me-2"></i>Razorpay API Credentials &amp; Webhook
     </div>
     <div class="card-body p-4">
       <p class="text-muted small mb-3">
-        Paste the <strong>Webhook Secret</strong> from your
-        <a href="https://dashboard.razorpay.com/app/webhooks" target="_blank">Razorpay Webhook settings</a>.
-        Set the webhook URL to: <code>{{ request.host_url }}api/webhooks/razorpay</code><br>
-        Subscribe to the <strong><code>payment_link.paid</code></strong> event.
-        When a customer pays via a Razorpay payment link, their account is automatically created here.
+        Get your API keys from
+        <a href="https://dashboard.razorpay.com/app/keys" target="_blank">Razorpay → Settings → API Keys</a>.
+        These are needed to <strong>manually import</strong> past payments from User Management.
+        The Webhook Secret is from
+        <a href="https://dashboard.razorpay.com/app/webhooks" target="_blank">Settings → Webhooks</a>
+        — set the URL to <code>{{ request.host_url }}api/webhooks/razorpay</code>
+        and subscribe to <code>payment_link.paid</code>.
       </p>
       <div class="row g-3">
-        <div class="col-md-8">
+        <div class="col-md-4">
+          <label class="form-label small fw-semibold">API Key ID</label>
+          <input type="text" name="razorpay_key_id" class="form-control"
+                 value="{{ razorpay_key_id }}"
+                 placeholder="rzp_live_xxxxxxxxxx">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-semibold">API Key Secret</label>
+          <input type="password" name="razorpay_key_secret" class="form-control"
+                 value="{{ razorpay_key_secret }}"
+                 placeholder="••••••••••••••••••••">
+        </div>
+        <div class="col-md-4">
           <label class="form-label small fw-semibold">Webhook Secret</label>
           <input type="password" name="razorpay_webhook_secret" class="form-control"
                  value="{{ razorpay_webhook_secret }}"
-                 placeholder="whsec_...">
-          <div class="form-text">Leave blank to accept webhooks without signature verification (not recommended for production).</div>
+                 placeholder="your-webhook-secret">
+          <div class="form-text">Leave blank to skip signature verification.</div>
         </div>
       </div>
     </div>

@@ -128,6 +128,8 @@ def _seed_site_settings(conn):
         ("razorpay_url_annual",   ""),
         ("razorpay_url_lifetime", ""),
         ("razorpay_webhook_secret", ""),
+        ("razorpay_key_id",     ""),
+        ("razorpay_key_secret", ""),
     ]:
         cur.execute(f"SELECT key FROM site_settings WHERE key={P}", (key,))
         if _row(cur) is None:

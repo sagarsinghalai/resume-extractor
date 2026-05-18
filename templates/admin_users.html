@@ -41,9 +41,65 @@
       Customers <span class="badge bg-info text-dark ms-1" id="cnt-customer">{{ users|selectattr('role','equalto','customer')|list|length }}</span>
     </button>
   </div>
-  <a href="/admin/users/new" class="btn btn-success btn-sm ms-auto">
-    <i class="bi bi-person-plus me-1"></i>Add New User
-  </a>
+  <div class="d-flex gap-2 ms-auto">
+    <button type="button" class="btn btn-outline-primary btn-sm"
+            data-bs-toggle="modal" data-bs-target="#importRazorpayModal"
+            title="Fetch a past Razorpay payment and create the customer account">
+      <i class="bi bi-cloud-download me-1"></i>Import from Razorpay
+    </button>
+    <a href="/admin/users/new" class="btn btn-success btn-sm">
+      <i class="bi bi-person-plus me-1"></i>Add New User
+    </a>
+  </div>
+</div>
+
+<!-- ── Import Razorpay Payment Modal ── -->
+<div class="modal fade" id="importRazorpayModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2 px-3"
+           style="background:linear-gradient(135deg,#0f3460,#1a73e8)">
+        <h6 class="modal-title fw-semibold text-white">
+          <i class="bi bi-cloud-download me-2"></i>Import Razorpay Payment
+        </h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <p class="text-muted small mb-3">
+          Enter the Razorpay <strong>Payment ID</strong> (starts with <code>pay_</code>)
+          from your
+          <a href="https://dashboard.razorpay.com/app/payments" target="_blank">
+            Razorpay Dashboard → Payments
+          </a>.
+          The customer's email, phone, and plan will be fetched automatically and their
+          account will be created (or updated if they already exist).
+        </p>
+        <form method="POST" action="/admin/import-razorpay-payment">
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Payment ID</label>
+            <input type="text" name="payment_id" class="form-control" required
+                   placeholder="pay_XXXXXXXXXXXXXXXXXX"
+                   pattern="pay_[A-Za-z0-9]+"
+                   title="Must start with pay_">
+            <div class="form-text">
+              Find it in Razorpay Dashboard → Payments → click on the payment → copy the ID at the top.
+            </div>
+          </div>
+          <div class="alert alert-info py-2 small mb-3">
+            <i class="bi bi-info-circle me-1"></i>
+            Make sure your <strong>Razorpay API Key ID &amp; Secret</strong> are saved in
+            <a href="/admin/site-settings">Site Settings</a> first.
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-cloud-download me-1"></i>Fetch &amp; Import
+            </button>
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Users Table -->

@@ -241,7 +241,7 @@ def admin_site_settings():
     if request.method == "POST":
         for key in ("hubspot_form_code", "contact_us_content",
                     "razorpay_url_monthly", "razorpay_url_annual", "razorpay_url_lifetime",
-                    "razorpay_webhook_secret"):
+                    "razorpay_webhook_secret", "razorpay_key_id", "razorpay_key_secret"):
             database.set_site_setting(key, request.form.get(key, ""))
         flash("Site settings saved.", "success")
         return redirect(url_for("admin_site_settings"))
@@ -252,6 +252,8 @@ def admin_site_settings():
         razorpay_url_annual      = database.get_site_setting("razorpay_url_annual"),
         razorpay_url_lifetime    = database.get_site_setting("razorpay_url_lifetime"),
         razorpay_webhook_secret  = database.get_site_setting("razorpay_webhook_secret"),
+        razorpay_key_id          = database.get_site_setting("razorpay_key_id"),
+        razorpay_key_secret      = database.get_site_setting("razorpay_key_secret"),
     )
 
 
@@ -549,6 +551,95 @@ def razorpay_webhook():
                 return jsonify({"error": "Processing failed"}), 500
 
     return jsonify({"ok": True}), 200
+
+
+@app.route("/admin/import-razorpay-payment", methods=["POST"])
+@superadmin_required
+def admin_import_razorpay_payment():
+    """Manually fetch a past Razorpay payment by ID and create/update the user."""
+    import urllib.request as _urlreq
+    import urllib.error  as _urlerr
+    import base64        as _b64
+
+    payment_id = request.form.get("payment_id", "").strip()
+    key_id     = database.get_site_setting("razorpay_key_id").strip()
+    key_secret = database.get_site_setting("razorpay_key_secret").strip()
+
+    if not payment_id:
+        flash("Please enter a Razorpay Payment ID (starts with pay_).", "danger")
+        return redirect(url_for("admin_users"))
+
+    if not key_id or not key_secret:
+        flash("Razorpay API Key ID and Secret are not configured — go to Site Settings.", "warning")
+        return redirect(url_for("admin_site_settings"))
+
+    # ── Call Razorpay API ──────────────────────────────────────────────────
+    url         = f"https://api.razorpay.com/v1/payments/{payment_id}"
+    credentials = _b64.b64encode(f"{key_id}:{key_secret}".encode()).decode()
+    req         = _urlreq.Request(url, headers={"Authorization": f"Basic {credentials}"})
+
+    try:
+        with _urlreq.urlopen(req, timeout=10) as resp:
+            payment = json.loads(resp.read().decode())
+    except _urlerr.HTTPError as exc:
+        body = ""
+        try:
+            body = exc.read().decode()
+        except Exception:
+            pass
+        flash(f"Razorpay API error {exc.code}: {body or exc.reason}. "
+              f"Check Payment ID and API credentials.", "danger")
+        return redirect(url_for("admin_users"))
+    except Exception as exc:
+        flash(f"Could not reach Razorpay API: {exc}", "danger")
+        return redirect(url_for("admin_users"))
+
+    # ── Parse payment fields ───────────────────────────────────────────────
+    email   = (payment.get("email")   or "").strip()
+    contact = (payment.get("contact") or "").strip()
+    notes   = payment.get("notes") or {}
+    name    = ""
+    if isinstance(notes, dict):
+        name = (notes.get("name") or notes.get("Name") or
+                notes.get("customer_name") or "").strip()
+
+    amount_paise = int(payment.get("amount") or 0)
+    amount_inr   = amount_paise / 100
+    status       = payment.get("status", "")
+
+    if status not in ("captured", "authorized"):
+        flash(f"Payment {payment_id} status is '{status}' — only captured payments are imported.", "warning")
+        return redirect(url_for("admin_users"))
+
+    if not email:
+        flash(f"Payment {payment_id} has no email address — cannot create user automatically. "
+              f"Use Add New User instead.", "warning")
+        return redirect(url_for("admin_users"))
+
+    # Map amount → plan
+    if amount_paise <= 55000:
+        membership_type = "monthly"
+    elif amount_paise <= 500000:
+        membership_type = "annual"
+    else:
+        membership_type = "lifetime"
+
+    try:
+        database.find_or_create_user_from_payment(
+            email=email, name=name, phone=contact,
+            membership_type=membership_type,
+            amount=amount_inr, payment_id=payment_id,
+        )
+    except Exception as exc:
+        flash(f"Database error while importing: {exc}", "danger")
+        return redirect(url_for("admin_users"))
+
+    flash(
+        f"✓ Imported — {email} added as customer ({membership_type} plan, ₹{amount_inr:.0f}). "
+        f"They can log in using their email via Forgot Password.",
+        "success",
+    )
+    return redirect(url_for("admin_users"))
 
 
 @app.route("/api/leads", methods=["POST"])
