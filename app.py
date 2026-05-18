@@ -83,7 +83,11 @@ def landing():
 
 @app.route("/pricing")
 def pricing():
-    return render_template("pricing.html")
+    return render_template("pricing.html",
+        razorpay_monthly  = database.get_site_setting("razorpay_url_monthly"),
+        razorpay_annual   = database.get_site_setting("razorpay_url_annual"),
+        razorpay_lifetime = database.get_site_setting("razorpay_url_lifetime"),
+    )
 
 
 @app.route("/reseller")
@@ -233,18 +237,17 @@ def admin_data():
 @superadmin_required
 def admin_site_settings():
     if request.method == "POST":
-        hubspot_form_code = request.form.get("hubspot_form_code", "")
-        contact_us_content = request.form.get("contact_us_content", "")
-        database.set_site_setting("hubspot_form_code", hubspot_form_code)
-        database.set_site_setting("contact_us_content", contact_us_content)
+        for key in ("hubspot_form_code", "contact_us_content",
+                    "razorpay_url_monthly", "razorpay_url_annual", "razorpay_url_lifetime"):
+            database.set_site_setting(key, request.form.get(key, ""))
         flash("Site settings saved.", "success")
         return redirect(url_for("admin_site_settings"))
-    hubspot_form_code = database.get_site_setting("hubspot_form_code")
-    contact_us_content = database.get_site_setting("contact_us_content")
-    return render_template(
-        "admin_site_settings.html",
-        hubspot_form_code=hubspot_form_code,
-        contact_us_content=contact_us_content,
+    return render_template("admin_site_settings.html",
+        hubspot_form_code    = database.get_site_setting("hubspot_form_code"),
+        contact_us_content   = database.get_site_setting("contact_us_content"),
+        razorpay_url_monthly  = database.get_site_setting("razorpay_url_monthly"),
+        razorpay_url_annual   = database.get_site_setting("razorpay_url_annual"),
+        razorpay_url_lifetime = database.get_site_setting("razorpay_url_lifetime"),
     )
 
 
@@ -328,6 +331,21 @@ def admin_delete_user(user_id):
         return redirect(url_for("admin_users"))
     database.delete_user(user_id)
     flash("User deleted.", "success")
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/users/<int:user_id>/change-role", methods=["POST"])
+@superadmin_required
+def admin_change_role(user_id):
+    if user_id == session["user_id"]:
+        flash("You cannot change your own role.", "danger")
+        return redirect(url_for("admin_users"))
+    role = request.form.get("role", "").strip()
+    if role not in ("superadmin", "reseller", "customer"):
+        flash("Invalid role.", "danger")
+        return redirect(url_for("admin_users"))
+    database.update_user_role(user_id, role)
+    flash("Role updated successfully.", "success")
     return redirect(url_for("admin_users"))
 
 

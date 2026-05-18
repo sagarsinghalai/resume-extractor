@@ -27,7 +27,14 @@
               <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Excel export</li>
               <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Email support</li>
             </ul>
-            <a href="/login" class="btn btn-outline-primary w-100 fw-semibold">Get Started</a>
+            {% if razorpay_monthly %}
+              <a href="{{ razorpay_monthly }}" target="_blank" rel="noopener"
+                 class="btn btn-outline-primary w-100 fw-semibold">
+                <i class="bi bi-credit-card me-1"></i>Pay Now
+              </a>
+            {% else %}
+              <a href="/login" class="btn btn-outline-primary w-100 fw-semibold">Get Started</a>
+            {% endif %}
           </div>
         </div>
       </div>
@@ -53,7 +60,14 @@
               <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Priority support</li>
               <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Advanced filters</li>
             </ul>
-            <a href="/login" class="btn btn-primary w-100 fw-semibold">Get Started</a>
+            {% if razorpay_annual %}
+              <a href="{{ razorpay_annual }}" target="_blank" rel="noopener"
+                 class="btn btn-primary w-100 fw-semibold">
+                <i class="bi bi-credit-card me-1"></i>Pay Now
+              </a>
+            {% else %}
+              <a href="/login" class="btn btn-primary w-100 fw-semibold">Get Started</a>
+            {% endif %}
           </div>
         </div>
       </div>
@@ -73,7 +87,14 @@
               <li class="mb-2"><i class="bi bi-check-circle-fill text-info me-2"></i>Reseller eligibility</li>
               <li class="mb-2"><i class="bi bi-check-circle-fill text-info me-2"></i>Dedicated support</li>
             </ul>
-            <a href="/login" class="btn btn-info w-100 fw-semibold text-dark">Get Started</a>
+            {% if razorpay_lifetime %}
+              <a href="{{ razorpay_lifetime }}" target="_blank" rel="noopener"
+                 class="btn btn-info w-100 fw-semibold text-dark">
+                <i class="bi bi-credit-card me-1"></i>Pay Now
+              </a>
+            {% else %}
+              <a href="/login" class="btn btn-info w-100 fw-semibold text-dark">Get Started</a>
+            {% endif %}
           </div>
         </div>
       </div>

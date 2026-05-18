@@ -31,6 +31,42 @@
     </div>
   </div>
 
+  <!-- Razorpay Payment Links -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header border-0 py-3 px-4 fw-semibold text-white"
+         style="background: linear-gradient(135deg,#0f3460,#1a73e8)">
+      <i class="bi bi-credit-card me-2"></i>Razorpay Payment Links
+    </div>
+    <div class="card-body p-4">
+      <p class="text-muted small mb-3">
+        Copy your payment page links from the
+        <a href="https://dashboard.razorpay.com/app/payment-links" target="_blank">Razorpay Dashboard</a>
+        and paste them below. When set, the pricing page buttons will say <strong>Pay Now</strong>
+        and open the Razorpay checkout. Leave blank to show a "Get Started" button linking to login.
+      </p>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label small fw-semibold">Monthly Plan — ₹500</label>
+          <input type="url" name="razorpay_url_monthly" class="form-control"
+                 value="{{ razorpay_url_monthly }}"
+                 placeholder="https://rzp.io/l/your-monthly-link">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-semibold">Annual Plan — ₹4,500</label>
+          <input type="url" name="razorpay_url_annual" class="form-control"
+                 value="{{ razorpay_url_annual }}"
+                 placeholder="https://rzp.io/l/your-annual-link">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-semibold">Lifetime Access — ₹10,000</label>
+          <input type="url" name="razorpay_url_lifetime" class="form-control"
+                 value="{{ razorpay_url_lifetime }}"
+                 placeholder="https://rzp.io/l/your-lifetime-link">
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Contact Us Content -->
   <div class="card border-0 shadow-sm mb-4">
     <div class="card-header border-0 py-3 px-4 fw-semibold text-white"

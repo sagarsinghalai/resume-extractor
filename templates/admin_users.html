@@ -119,34 +119,40 @@
             <td class="text-muted small">{{ u.email or '—' }}</td>
             <td class="text-muted small">{{ u.phone or '—' }}</td>
             <td>
-              {% if u.role == 'superadmin' %}
-                <span class="badge bg-danger">Superadmin</span>
-              {% elif u.role == 'reseller' %}
-                <span class="badge bg-warning text-dark">Reseller</span>
+              {% if u.id != session.user_id %}
+              <form method="POST" action="/admin/users/{{ u.id }}/change-role"
+                    class="d-flex gap-1 align-items-center">
+                <select name="role" class="form-select form-select-sm" style="max-width:105px">
+                  <option value="customer"   {% if u.role == 'customer'   %}selected{% endif %}>Customer</option>
+                  <option value="reseller"   {% if u.role == 'reseller'   %}selected{% endif %}>Reseller</option>
+                  <option value="superadmin" {% if u.role == 'superadmin' %}selected{% endif %}>Admin</option>
+                </select>
+                <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-2" title="Save role">
+                  <i class="bi bi-check-lg"></i> Save
+                </button>
+              </form>
               {% else %}
-                <span class="badge bg-info text-dark">Customer</span>
+                {% if u.role == 'superadmin' %}<span class="badge bg-danger">Admin</span>
+                {% elif u.role == 'reseller' %}<span class="badge bg-warning text-dark">Reseller</span>
+                {% else %}<span class="badge bg-info text-dark">Customer</span>{% endif %}
               {% endif %}
             </td>
             <td>
-              {% if u.role == 'customer' %}
-                <form method="POST" action="/admin/users/{{ u.id }}/assign-reseller"
-                      class="d-flex gap-1 align-items-center">
-                  <select name="reseller_id" class="form-select form-select-sm" style="max-width:120px">
-                    <option value="">— None —</option>
-                    {% for r in resellers %}
-                      <option value="{{ r.id }}"
-                        {% if u.reseller_id == r.id %}selected{% endif %}>
-                        {{ r.username }}
-                      </option>
-                    {% endfor %}
-                  </select>
-                  <button type="submit" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Save">
-                    <i class="bi bi-check-lg"></i>
-                  </button>
-                </form>
-              {% else %}
-                <span class="text-muted small">—</span>
-              {% endif %}
+              <form method="POST" action="/admin/users/{{ u.id }}/assign-reseller"
+                    class="d-flex gap-1 align-items-center">
+                <select name="reseller_id" class="form-select form-select-sm" style="max-width:110px">
+                  <option value="">— None —</option>
+                  {% for r in resellers %}
+                    <option value="{{ r.id }}"
+                      {% if u.reseller_id == r.id %}selected{% endif %}>
+                      {{ r.username }}
+                    </option>
+                  {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Save reseller">
+                  <i class="bi bi-check-lg"></i> Save
+                </button>
+              </form>
             </td>
             <td class="small">
               {% if u.membership_type %}

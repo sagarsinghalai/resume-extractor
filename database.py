@@ -124,6 +124,9 @@ def _seed_site_settings(conn):
     for key, default_val in [
         ("hubspot_form_code", ""),
         ("contact_us_content", "<p>Contact us at support@example.com</p>"),
+        ("razorpay_url_monthly",  ""),
+        ("razorpay_url_annual",   ""),
+        ("razorpay_url_lifetime", ""),
     ]:
         cur.execute(f"SELECT key FROM site_settings WHERE key={P}", (key,))
         if _row(cur) is None:
@@ -186,6 +189,14 @@ def create_user(username: str, email: str, password: str, role: str,
         return None
     finally:
         conn.close()
+
+
+def update_user_role(user_id: int, role: str):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(f"UPDATE users SET role={P} WHERE id={P}", (role, user_id))
+    conn.commit()
+    conn.close()
 
 
 def assign_customer_reseller(customer_id: int, reseller_id):

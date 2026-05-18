@@ -1,3 +1,49 @@
+/* ── Global size reduction ──────────────────────────────────────── */
+body { font-size: 0.85rem; }
+h1   { font-size: 1.6rem !important; }
+h2   { font-size: 1.35rem !important; }
+h3   { font-size: 1.15rem !important; }
+h4   { font-size: 1.05rem !important; }
+h5   { font-size: 0.95rem !important; }
+h6   { font-size: 0.875rem !important; }
+p    { font-size: 0.875rem; }
+.lead { font-size: 0.95rem !important; }
+
+/* Display headings (hero etc.) */
+.display-3 { font-size: 2.4rem !important; }
+.display-4 { font-size: 2rem !important; }
+.display-5 { font-size: 1.7rem !important; }
+.display-6 { font-size: 1.4rem !important; }
+
+/* Buttons */
+.btn         { font-size: 0.8rem;  padding: 0.3rem 0.75rem; }
+.btn-sm      { font-size: 0.75rem; padding: 0.2rem 0.5rem;  }
+.btn-lg      { font-size: 0.875rem; padding: 0.4rem 1rem;   }
+
+/* Inputs, selects */
+.form-control, .form-select { font-size: 0.85rem; padding: 0.3rem 0.6rem; }
+.form-control-sm, .form-select-sm { font-size: 0.78rem; }
+.form-label  { font-size: 0.82rem; margin-bottom: 0.25rem; }
+
+/* Navbar */
+.navbar      { font-size: 0.82rem; }
+.navbar-brand { font-size: 1rem !important; }
+.nav-link    { font-size: 0.82rem; padding: 0.35rem 0.65rem !important; }
+
+/* Cards */
+.card-header { font-size: 0.875rem; padding: 0.6rem 1rem !important; }
+.card-body   { padding: 1rem; }
+
+/* Badges */
+.badge { font-size: 0.7rem; }
+
+/* Tables */
+.table { font-size: 0.82rem; }
+.table th, .table td { padding: 0.45rem 0.6rem; }
+
+/* Modal */
+.modal-title { font-size: 0.95rem; }
+
 /* ── Drop Zone ──────────────────────────────────────────────────── */
 .drop-zone {
   border: 2px dashed #0d6efd;
