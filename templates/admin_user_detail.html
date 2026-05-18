@@ -1,0 +1,348 @@
+{% extends "base.html" %}
+{% block title %}{{ user.username }} — User Detail{% endblock %}
+
+{% block head %}
+<style>
+  .detail-card-header {
+    background: linear-gradient(135deg,#0f3460,#1a73e8);
+  }
+  .avatar-circle {
+    width: 52px; height: 52px; border-radius: 50%;
+    background: linear-gradient(135deg,#1a73e8,#0f3460);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.3rem; font-weight: 700; color: #fff; flex-shrink: 0;
+  }
+  .sub-account-row:hover { background: #f8f9fa; }
+  .btn-xs { font-size: 0.7rem; padding: 0.1rem 0.4rem; line-height: 1.4; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb" style="font-size:.82rem">
+    <li class="breadcrumb-item"><a href="/admin/users">User Management</a></li>
+    <li class="breadcrumb-item active">{{ user.username }}</li>
+  </ol>
+</nav>
+
+<!-- Header -->
+<div class="d-flex align-items-center gap-3 mb-4">
+  <div class="avatar-circle">{{ user.username[0].upper() }}</div>
+  <div class="flex-grow-1">
+    <h4 class="fw-bold mb-0">{{ user.username }}</h4>
+    <div class="text-muted" style="font-size:.82rem">
+      {{ user.email or 'No email set' }}
+      &nbsp;·&nbsp; Registered {{ (user.created_at or '')[:10] }}
+    </div>
+  </div>
+  <div class="d-flex align-items-center gap-2 flex-shrink-0">
+    {% if user.role == 'superadmin' %}<span class="badge bg-danger">Admin</span>
+    {% elif user.role == 'reseller' %}<span class="badge bg-warning text-dark">Reseller</span>
+    {% else %}<span class="badge bg-info text-dark">Customer</span>{% endif %}
+    {% if user.id == session.user_id %}
+      <span class="badge bg-success">You</span>
+    {% endif %}
+    <a href="/admin/users" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+  </div>
+</div>
+
+<!-- Flash messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }} alert-dismissible fade show py-2" role="alert">
+      {{ msg }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  {% endfor %}
+{% endwith %}
+
+<div class="row g-4">
+
+  <!-- ── LEFT COLUMN ──────────────────────────────────────── -->
+  <div class="col-lg-7">
+
+    <!-- Full Profile Edit Card -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header detail-card-header border-0 py-2 px-3 fw-semibold text-white small">
+        <i class="bi bi-person-gear me-1"></i>Edit Profile
+      </div>
+      <div class="card-body p-3">
+        <form method="POST" action="/admin/users/{{ user.id }}/update-full">
+          <div class="row g-2">
+
+            <div class="col-sm-6">
+              <label class="form-label small fw-semibold">Username <span class="text-danger">*</span></label>
+              <input type="text" name="username" class="form-control form-control-sm"
+                     value="{{ user.username }}" required>
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label small fw-semibold">Email</label>
+              <input type="email" name="email" class="form-control form-control-sm"
+                     value="{{ user.email or '' }}" placeholder="user@example.com">
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label small fw-semibold">Phone</label>
+              <input type="text" name="phone" class="form-control form-control-sm"
+                     value="{{ user.phone or '' }}" placeholder="+91 98765 43210">
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label small fw-semibold">Role</label>
+              {% if user.id == session.user_id %}
+                <input type="text" class="form-control form-control-sm" value="{{ user.role }}" disabled>
+                <input type="hidden" name="role" value="{{ user.role }}">
+                <div class="form-text" style="font-size:.7rem">Cannot change your own role.</div>
+              {% else %}
+                <select name="role" class="form-select form-select-sm" id="detail-role-select">
+                  <option value="customer"   {% if user.role == 'customer'   %}selected{% endif %}>Customer</option>
+                  <option value="reseller"   {% if user.role == 'reseller'   %}selected{% endif %}>Reseller</option>
+                  <option value="superadmin" {% if user.role == 'superadmin' %}selected{% endif %}>Superadmin</option>
+                </select>
+              {% endif %}
+            </div>
+
+            <!-- Reseller assignment — only for customers -->
+            <div class="col-sm-6" id="detail-reseller-field"
+                 {% if user.role != 'customer' %}style="display:none"{% endif %}>
+              <label class="form-label small fw-semibold">Assign Reseller</label>
+              <select name="reseller_id" class="form-select form-select-sm">
+                <option value="">— None —</option>
+                {% for r in resellers %}
+                  <option value="{{ r.id }}"
+                    {% if user.reseller_id and user.reseller_id == r.id %}selected{% endif %}>
+                    {{ r.username }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label small fw-semibold">Membership</label>
+              <select name="membership_type" class="form-select form-select-sm">
+                <option value="">— None —</option>
+                <option value="monthly"  {% if user.membership_type == 'monthly'  %}selected{% endif %}>Monthly</option>
+                <option value="annual"   {% if user.membership_type == 'annual'   %}selected{% endif %}>Annual</option>
+                <option value="lifetime" {% if user.membership_type == 'lifetime' %}selected{% endif %}>Lifetime</option>
+                <option value="reseller" {% if user.membership_type == 'reseller' %}selected{% endif %}>Reseller</option>
+              </select>
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label small fw-semibold">Amount Paid (₹)</label>
+              <input type="number" step="0.01" name="amount_paid" class="form-control form-control-sm"
+                     value="{{ user.amount_paid if user.amount_paid is not none else '' }}"
+                     placeholder="0.00">
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label small fw-semibold">Expiry Date</label>
+              <input type="date" name="date_of_expiry" class="form-control form-control-sm"
+                     value="{{ user.date_of_expiry or '' }}">
+            </div>
+
+          </div><!-- /row -->
+
+          <div class="mt-3 d-flex gap-2">
+            <button type="submit" class="btn btn-primary btn-sm">
+              <i class="bi bi-floppy me-1"></i>Save All Changes
+            </button>
+            <a href="/admin/users" class="btn btn-outline-secondary btn-sm">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div><!-- /profile card -->
+
+    <!-- Reset Password Card -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header detail-card-header border-0 py-2 px-3 fw-semibold text-white small">
+        <i class="bi bi-shield-lock me-1"></i>Reset Password
+      </div>
+      <div class="card-body p-3">
+        <form method="POST" action="/admin/users/{{ user.id }}/change-password">
+          <input type="hidden" name="return_to" value="detail">
+          <div class="d-flex gap-2 align-items-end">
+            <div class="flex-grow-1">
+              <label class="form-label small fw-semibold">New Password</label>
+              <input type="password" name="new_password" class="form-control form-control-sm"
+                     required placeholder="Enter new password">
+            </div>
+            <button type="submit" class="btn btn-warning btn-sm flex-shrink-0">
+              <i class="bi bi-key me-1"></i>Reset Password
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Assigned Reseller (if customer) -->
+    {% if user.role == 'customer' and user.reseller_id %}
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header detail-card-header border-0 py-2 px-3 fw-semibold text-white small">
+        <i class="bi bi-person-check me-1"></i>Assigned Reseller
+      </div>
+      <div class="card-body p-3">
+        <a href="/admin/users/{{ user.reseller_id }}" class="text-decoration-none fw-semibold">
+          <i class="bi bi-person-circle me-1 text-primary"></i>{{ user.reseller_username }}
+        </a>
+        <span class="badge bg-warning text-dark ms-2">Reseller</span>
+      </div>
+    </div>
+    {% endif %}
+
+  </div><!-- /left col -->
+
+  <!-- ── RIGHT COLUMN ─────────────────────────────────────── -->
+  <div class="col-lg-5">
+
+    <!-- Payment History Card -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header detail-card-header border-0 py-2 px-3 fw-semibold text-white small">
+        <i class="bi bi-receipt me-1"></i>Payment History
+        <span class="badge bg-light text-dark ms-2">{{ payment_history|length }}</span>
+      </div>
+      <div class="card-body p-3">
+        {% if payment_history %}
+        <div class="table-responsive mb-3">
+          <table class="table table-sm table-bordered mb-0" style="font-size:.75rem">
+            <thead class="table-light">
+              <tr>
+                <th>Plan</th>
+                <th>Amount</th>
+                <th>Date</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in payment_history %}
+              <tr>
+                <td>{{ p.membership_type or '—' }}</td>
+                <td>{% if p.amount is not none %}₹{{ "%.0f"|format(p.amount) }}{% else %}—{% endif %}</td>
+                <td class="text-nowrap">{{ p.payment_date or '—' }}</td>
+                <td class="text-muted" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                    title="{{ p.notes or '' }}">{{ p.notes or '—' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-muted small mb-3">No payment records yet.</p>
+        {% endif %}
+
+        <!-- Add Payment Form -->
+        <p class="fw-semibold small mb-2 border-top pt-2">
+          <i class="bi bi-plus-circle me-1 text-success"></i>Add Payment Record
+        </p>
+        <form method="POST" action="/admin/users/{{ user.id }}/add-payment">
+          <input type="hidden" name="return_to" value="detail">
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label small fw-semibold">Plan</label>
+              <select name="membership_type" class="form-select form-select-sm">
+                <option value="">— Select —</option>
+                <option value="monthly">Monthly</option>
+                <option value="annual">Annual</option>
+                <option value="lifetime">Lifetime</option>
+                <option value="reseller">Reseller</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold">Amount (₹)</label>
+              <input type="number" step="0.01" name="amount"
+                     class="form-control form-control-sm" placeholder="500">
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold">Date</label>
+              <input type="date" name="payment_date" class="form-control form-control-sm">
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold">Notes / Txn ID</label>
+              <input type="text" name="notes" class="form-control form-control-sm"
+                     placeholder="Razorpay ref...">
+            </div>
+            <div class="col-12">
+              <button type="submit" class="btn btn-success btn-sm w-100">
+                <i class="bi bi-plus-lg me-1"></i>Add Payment Record
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div><!-- /payment card -->
+
+    <!-- Sub-accounts (only shown for resellers) -->
+    {% if user.role == 'reseller' %}
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header detail-card-header border-0 py-2 px-3 fw-semibold text-white small d-flex align-items-center">
+        <i class="bi bi-diagram-3 me-1"></i>Sub-accounts
+        <span class="badge bg-light text-dark ms-2">{{ sub_accounts|length }} customer{{ 's' if sub_accounts|length != 1 else '' }}</span>
+      </div>
+      {% if sub_accounts %}
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover align-middle mb-0" style="font-size:.78rem">
+          <thead class="table-light">
+            <tr>
+              <th class="px-3">Username</th>
+              <th>Email</th>
+              <th>Membership</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in sub_accounts %}
+            <tr class="sub-account-row">
+              <td class="px-3 fw-semibold">
+                <a href="/admin/users/{{ c.id }}" class="text-decoration-none text-dark">
+                  <i class="bi bi-person me-1 text-muted"></i>{{ c.username }}
+                </a>
+              </td>
+              <td class="text-muted">{{ c.email or '—' }}</td>
+              <td>
+                {% if c.membership_type %}
+                  <span class="badge bg-secondary">{{ c.membership_type }}</span>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                <a href="/admin/users/{{ c.id }}" class="btn btn-xs btn-outline-primary" title="View details">
+                  <i class="bi bi-arrow-right"></i>
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body p-3 text-muted small">
+        <i class="bi bi-info-circle me-1"></i>No customers assigned to this reseller yet.
+        Go to <a href="/admin/users">User Management</a> to assign customers.
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}<!-- /sub-accounts -->
+
+  </div><!-- /right col -->
+</div><!-- /row -->
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Role dropdown → show/hide reseller assignment field
+  const roleSelect = document.getElementById('detail-role-select');
+  const resellerField = document.getElementById('detail-reseller-field');
+  if (roleSelect && resellerField) {
+    roleSelect.addEventListener('change', function () {
+      resellerField.style.display = this.value === 'customer' ? '' : 'none';
+    });
+  }
+</script>
+{% endblock %}

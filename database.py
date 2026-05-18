@@ -216,7 +216,10 @@ def get_customers_of_reseller(reseller_id: int) -> list:
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
-        f"SELECT id, username, email FROM users WHERE reseller_id={P} AND role='customer' ORDER BY username ASC",
+        f"""SELECT id, username, email, membership_type, amount_paid, date_of_expiry
+            FROM users
+            WHERE reseller_id={P} AND role='customer'
+            ORDER BY username ASC""",
         (reseller_id,),
     )
     rows = _rows(cur)
@@ -252,7 +255,12 @@ def get_user_by_id(user_id: int):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
-        f"SELECT id, username, email, role, created_at FROM users WHERE id={P}",
+        f"""SELECT u.id, u.username, u.email, u.role, u.created_at,
+                   u.phone, u.membership_type, u.amount_paid, u.date_of_expiry,
+                   u.reseller_id, r.username AS reseller_username
+            FROM users u
+            LEFT JOIN users r ON u.reseller_id = r.id
+            WHERE u.id = {P}""",
         (user_id,),
     )
     result = _row(cur)
@@ -300,14 +308,35 @@ def update_user_password(user_id: int, new_password: str):
 
 
 def update_user_profile(user_id: int, phone: str, membership_type: str,
-                        amount_paid, date_of_expiry: str):
+                        amount_paid, date_of_expiry: str, email: str = None):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
         f"""UPDATE users
-            SET phone={P}, membership_type={P}, amount_paid={P}, date_of_expiry={P}
+            SET phone={P}, membership_type={P}, amount_paid={P}, date_of_expiry={P}, email={P}
             WHERE id={P}""",
         (phone or None, membership_type or None,
+         float(amount_paid) if amount_paid not in (None, '') else None,
+         date_of_expiry or None, email or None, user_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def update_user_full(user_id: int, username: str, email: str, phone: str,
+                     role: str, reseller_id, membership_type: str,
+                     amount_paid, date_of_expiry: str):
+    """Update all editable fields for a user in one call."""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        f"""UPDATE users
+            SET username={P}, email={P}, phone={P}, role={P}, reseller_id={P},
+                membership_type={P}, amount_paid={P}, date_of_expiry={P}
+            WHERE id={P}""",
+        (username, email or None, phone or None, role,
+         int(reseller_id) if reseller_id else None,
+         membership_type or None,
          float(amount_paid) if amount_paid not in (None, '') else None,
          date_of_expiry or None, user_id),
     )

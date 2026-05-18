@@ -283,6 +283,28 @@ def admin_users():
     return render_template("admin_users.html", users=users, resellers=resellers)
 
 
+@app.route("/admin/users/<int:user_id>")
+@superadmin_required
+def admin_user_detail(user_id):
+    user = database.get_user_by_id(user_id)
+    if not user:
+        flash("User not found.", "danger")
+        return redirect(url_for("admin_users"))
+    all_users = database.get_all_users()
+    resellers = [u for u in all_users if u["role"] == "reseller"]
+    sub_accounts = []
+    if user["role"] == "reseller":
+        sub_accounts = database.get_customers_of_reseller(user_id)
+    payment_history = database.get_all_payment_history(user_id)
+    return render_template(
+        "admin_user_detail.html",
+        user=user,
+        resellers=resellers,
+        sub_accounts=sub_accounts,
+        payment_history=payment_history,
+    )
+
+
 @app.route("/admin/users/create", methods=["POST"])
 @superadmin_required
 def admin_create_user():
@@ -334,6 +356,46 @@ def admin_delete_user(user_id):
     return redirect(url_for("admin_users"))
 
 
+@app.route("/admin/users/<int:user_id>/update-full", methods=["POST"])
+@superadmin_required
+def admin_update_user_full(user_id):
+    """Update all fields for a user (from the detail page)."""
+    target = database.get_user_by_id(user_id)
+    if not target:
+        flash("User not found.", "danger")
+        return redirect(url_for("admin_users"))
+
+    username        = request.form.get("username", "").strip()
+    email           = request.form.get("email", "").strip()
+    phone           = request.form.get("phone", "").strip()
+    membership_type = request.form.get("membership_type", "").strip()
+    amount_paid     = request.form.get("amount_paid", "").strip()
+    date_of_expiry  = request.form.get("date_of_expiry", "").strip()
+    reseller_id_raw = request.form.get("reseller_id", "").strip()
+
+    # Role: only allow changing if not own account
+    if user_id == session["user_id"]:
+        role = target["role"]
+    else:
+        role = request.form.get("role", target["role"]).strip()
+        if role not in ("superadmin", "reseller", "customer"):
+            role = target["role"]
+
+    # reseller_id only applies to customers
+    reseller_id_val = int(reseller_id_raw) if reseller_id_raw and role == "customer" else None
+
+    if not username:
+        flash("Username cannot be empty.", "danger")
+        return redirect(url_for("admin_user_detail", user_id=user_id))
+
+    database.update_user_full(
+        user_id, username, email, phone, role, reseller_id_val,
+        membership_type, amount_paid, date_of_expiry,
+    )
+    flash("User details saved successfully.", "success")
+    return redirect(url_for("admin_user_detail", user_id=user_id))
+
+
 @app.route("/admin/users/<int:user_id>/change-role", methods=["POST"])
 @superadmin_required
 def admin_change_role(user_id):
@@ -363,11 +425,16 @@ def admin_assign_reseller(user_id):
 @superadmin_required
 def admin_change_password(user_id):
     new_password = request.form.get("new_password", "")
+    return_to = request.form.get("return_to", "")
     if not new_password:
         flash("Password cannot be empty.", "danger")
+        if return_to == "detail":
+            return redirect(url_for("admin_user_detail", user_id=user_id))
         return redirect(url_for("admin_users"))
     database.update_user_password(user_id, new_password)
     flash("Password updated successfully.", "success")
+    if return_to == "detail":
+        return redirect(url_for("admin_user_detail", user_id=user_id))
     return redirect(url_for("admin_users"))
 
 
@@ -375,11 +442,15 @@ def admin_change_password(user_id):
 @superadmin_required
 def admin_update_user_profile(user_id):
     phone           = request.form.get("phone", "").strip()
+    email           = request.form.get("email", "").strip()
     membership_type = request.form.get("membership_type", "").strip()
     amount_paid     = request.form.get("amount_paid", "").strip()
     date_of_expiry  = request.form.get("date_of_expiry", "").strip()
-    database.update_user_profile(user_id, phone, membership_type, amount_paid, date_of_expiry)
+    database.update_user_profile(user_id, phone, membership_type, amount_paid, date_of_expiry, email)
     flash("User profile updated.", "success")
+    return_to = request.form.get("return_to", "")
+    if return_to == "detail":
+        return redirect(url_for("admin_user_detail", user_id=user_id))
     return redirect(url_for("admin_users"))
 
 
@@ -390,8 +461,11 @@ def admin_add_payment(user_id):
     amount          = request.form.get("amount", "").strip()
     payment_date    = request.form.get("payment_date", "").strip()
     notes           = request.form.get("notes", "").strip()
+    return_to       = request.form.get("return_to", "")
     database.add_payment_history(user_id, membership_type, amount, payment_date, notes)
     flash("Payment record added.", "success")
+    if return_to == "detail":
+        return redirect(url_for("admin_user_detail", user_id=user_id))
     return redirect(url_for("admin_users"))
 
 

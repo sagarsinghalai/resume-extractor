@@ -128,10 +128,10 @@
           <tr>
             <td class="ps-2 text-muted">{{ loop.index }}</td>
 
-            <!-- Username + Email stacked -->
+            <!-- Username + Email stacked (username is a link to detail page) -->
             <td>
               <div class="fw-semibold">
-                {{ u.username }}
+                <a href="/admin/users/{{ u.id }}" class="text-decoration-none text-dark">{{ u.username }}</a>
                 {% if u.id == session.user_id %}
                   <span class="badge bg-success ms-1" style="font-size:.65rem">You</span>
                 {% endif %}
@@ -240,13 +240,19 @@
                   <!-- Profile form -->
                   <p class="fw-semibold small mb-2"><i class="bi bi-person me-1"></i>Profile Details</p>
                   <form method="POST" action="/admin/users/{{ u.id }}/update-profile">
+                    <input type="hidden" name="return_to" value="">
                     <div class="row g-2 mb-2">
-                      <div class="col-6 col-md-3">
+                      <div class="col-6 col-md-4">
+                        <label class="form-label small fw-semibold">Email</label>
+                        <input type="email" name="email" class="form-control form-control-sm"
+                               value="{{ u.email or '' }}" placeholder="user@example.com">
+                      </div>
+                      <div class="col-6 col-md-4">
                         <label class="form-label small fw-semibold">Phone</label>
                         <input type="text" name="phone" class="form-control form-control-sm"
                                value="{{ u.phone or '' }}" placeholder="+91 ...">
                       </div>
-                      <div class="col-6 col-md-3">
+                      <div class="col-6 col-md-4">
                         <label class="form-label small fw-semibold">Membership</label>
                         <select name="membership_type" class="form-select form-select-sm">
                           <option value="">— None —</option>
@@ -256,20 +262,23 @@
                           <option value="reseller" {% if u.membership_type == 'reseller' %}selected{% endif %}>Reseller</option>
                         </select>
                       </div>
-                      <div class="col-6 col-md-3">
+                      <div class="col-6 col-md-4">
                         <label class="form-label small fw-semibold">Amount Paid (₹)</label>
                         <input type="number" step="0.01" name="amount_paid" class="form-control form-control-sm"
                                value="{{ u.amount_paid if u.amount_paid is not none else '' }}">
                       </div>
-                      <div class="col-6 col-md-3">
+                      <div class="col-6 col-md-4">
                         <label class="form-label small fw-semibold">Expiry Date</label>
                         <input type="date" name="date_of_expiry" class="form-control form-control-sm"
                                value="{{ u.date_of_expiry or '' }}">
                       </div>
                     </div>
                     <button type="submit" class="btn btn-primary btn-sm">
-                      <i class="bi bi-floppy me-1"></i>Save Profile
+                      <i class="bi bi-floppy me-1"></i>Save Changes
                     </button>
+                    <a href="/admin/users/{{ u.id }}" class="btn btn-outline-primary btn-sm ms-1">
+                      <i class="bi bi-arrow-right me-1"></i>Full Profile
+                    </a>
                   </form>
 
                   <hr class="my-3">
